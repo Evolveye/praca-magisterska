@@ -1,16 +1,34 @@
-fn tuple() -> (i32, i32) {
-    (1, 2)
-}
+mod world;
+
+use std::io;
 
 fn main() {
-    println!("Hello, world!");
-    let mut nums = vec![1, 2, 3, 4];
+    let fragment = world::visible_fragment::VisibleFragment::new();
 
-    nums.push(5);
+    // let x = read_i16( "Podaj X" );
+    // let y = read_i16( "Podaj Y" );
+    // let z = read_i16( "Podaj Z" );
 
-    for i in 0..10_000 {
-        nums.push(i * 10)
+    fragment.print_dimensions();
+    fragment.chunks[ 0 ][ 0 ].print_dimensions();
+    fragment.chunks[ 0 ][ 0 ].blocks[ 0 ][ 0 ][ 0 ].print();
+    // fragment.chunks[ 0 ][ 0 ].blocks[ y as usize ][ x as usize ][ z as usize ].print();
+}
+
+fn read_i16( label:&str ) -> i16 {
+    let mut num_str = String::new();
+
+    loop {
+        println!( "{label}" );
+
+        io::stdin()
+            .read_line(&mut num_str)
+            .expect("Failed to read line");
+
+        if let Ok(num) = num_str.trim().parse::<i16>() {
+            return num;
+        } else {
+            println!( "Your data: '{}'", num_str )
+        }
     }
-
-    println!("{:?}", &nums[0..10]);
 }
