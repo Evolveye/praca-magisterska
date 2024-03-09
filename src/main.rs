@@ -1,17 +1,20 @@
 mod world;
+mod renderer;
 
 use std::io;
 
 fn main() {
-    let fragment = world::visible_fragment::VisibleFragment::new();
+    let _ = renderer::render();
+
+    // let fragment = world::visible_fragment::VisibleFragment::new();
 
     // let x = read_i16( "Podaj X" );
     // let y = read_i16( "Podaj Y" );
     // let z = read_i16( "Podaj Z" );
 
-    fragment.print_dimensions();
-    fragment.chunks[ 0 ][ 0 ].print_dimensions();
-    fragment.chunks[ 0 ][ 0 ].blocks[ 0 ][ 0 ][ 0 ].print();
+    // fragment.print_dimensions();
+    // fragment.chunks[ 0 ][ 0 ].print_dimensions();
+    // fragment.chunks[ 0 ][ 0 ].blocks[ 0 ][ 0 ][ 0 ].print();
     // fragment.chunks[ 0 ][ 0 ].blocks[ y as usize ][ x as usize ][ z as usize ].print();
 }
 
