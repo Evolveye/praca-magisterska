@@ -43,11 +43,14 @@ const VALIDATION_LAYER:vk::ExtensionName = vk::ExtensionName::from_bytes( b"VK_L
 const DEVICE_EXTENSIONS:&[ vk::ExtensionName ] = &[ vk::KHR_SWAPCHAIN_EXTENSION.name ];
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
-static VERTICES:[ Vertex; 3 ] = [
-  Vertex::new( vec2(  0.0, -0.5 ), vec3( 1.0, 0.0, 0.0 ) ),
-  Vertex::new( vec2(  0.5,  0.5 ), vec3( 0.0, 1.0, 0.0 ) ),
-  Vertex::new( vec2( -0.5,  0.5 ), vec3( 0.0, 0.0, 1.0 ) ),
+static VERTICES:[ Vertex; 4 ] = [
+  Vertex::new( vec2( -0.5, -0.5 ), vec3( 1.0, 0.0, 0.0 ) ),
+  Vertex::new( vec2(  0.5, -0.5 ), vec3( 0.0, 1.0, 0.0 ) ),
+  Vertex::new( vec2(  0.5,  0.5 ), vec3( 0.0, 0.0, 1.0 ) ),
+  Vertex::new( vec2( -0.5,  0.5 ), vec3( 1.0, 1.0, 1.0 ) ),
 ];
+
+const INDICES:&[ u16 ] = &[ 0, 1, 2, 2, 3, 0 ];
 
 
 
@@ -128,6 +131,7 @@ impl App {
     create_framebuffers( &device, &mut data )?;
     create_command_pool( &instance, &device, &mut data )?;
     create_vertex_buffer( &instance, &device, &mut data )?;
+    create_index_buffer( &instance, &device, &mut data )?;
     create_command_buffers( &device, &mut data )?;
     create_sync_objects( &device, &mut data )?;
 
@@ -200,6 +204,9 @@ impl App {
 
     self.device.destroy_buffer( self.data.vertex_buffer, None );
     self.device.free_memory( self.data.vertex_buffer_memory, None );
+    self.device.destroy_buffer( self.data.index_buffer, None );
+    self.device.free_memory( self.data.index_buffer_memory, None );
+
     self.data.in_flight_fences.iter().for_each( |f| self.device.destroy_fence( *f, None ) );
     self.data.render_finished_semaphores.iter().for_each( |s| self.device.destroy_semaphore( *s, None ) );
     self.data.image_available_semaphores.iter().for_each( |s| self.device.destroy_semaphore( *s, None ) );
@@ -271,6 +278,8 @@ struct AppData {
   images_in_flight: Vec<vk::Fence>,
   vertex_buffer: vk::Buffer,
   vertex_buffer_memory: vk::DeviceMemory,
+  index_buffer: vk::Buffer,
+  index_buffer_memory: vk::DeviceMemory,
 }
 
 
@@ -927,6 +936,42 @@ unsafe fn create_vertex_buffer( instance:&Instance, device:&Device, data:&mut Ap
   Ok(())
 }
 
+unsafe fn create_index_buffer( instance:&Instance, device:&Device, data:&mut AppData ) -> Result<()>{
+  let size = (size_of::<u16>() * INDICES.len()) as u64;
+  let ( staging_buffer, staging_buffer_memory ) = create_buffer(
+    instance,
+    device,
+    data,
+    size,
+    vk::BufferUsageFlags::TRANSFER_SRC,
+    vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
+  )?;
+
+  let memory = device.map_memory( staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
+
+  memcpy( INDICES.as_ptr(), memory.cast(), INDICES.len() );
+  device.unmap_memory( staging_buffer_memory );
+
+  let ( index_buffer, index_buffer_memory ) = create_buffer(
+    instance,
+    device,
+    data,
+    size,
+    vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
+    vk::MemoryPropertyFlags::DEVICE_LOCAL
+  )?;
+
+  data.index_buffer = index_buffer;
+  data.index_buffer_memory = index_buffer_memory;
+
+  copy_buffer( device, data, staging_buffer, index_buffer, size )?;
+
+  device.destroy_buffer( staging_buffer, None );
+  device.free_memory( staging_buffer_memory, None );
+
+  Ok(())
+}
+
 unsafe fn create_command_buffers( device:&Device, data:&mut AppData ) -> Result<()> {
   let allocate_info = vk::CommandBufferAllocateInfo::builder()
     .command_pool( data.command_pool )
@@ -964,7 +1009,8 @@ unsafe fn create_command_buffers( device:&Device, data:&mut AppData ) -> Result<
     device.cmd_begin_render_pass( *command_buffer, &render_pass_begin, vk::SubpassContents::INLINE );
     device.cmd_bind_pipeline( *command_buffer, vk::PipelineBindPoint::GRAPHICS, data.pipeline );
     device.cmd_bind_vertex_buffers( *command_buffer, 0, &[ data.vertex_buffer ], &[ 0 ] );
-    device.cmd_draw( *command_buffer, VERTICES.len() as u32, 1, 0, 0 );
+    device.cmd_bind_index_buffer( *command_buffer, data.index_buffer, 0, vk::IndexType::UINT16 );
+    device.cmd_draw_indexed( *command_buffer, INDICES.len() as u32, 1, 0, 0, 0 );
     device.cmd_end_render_pass( *command_buffer );
 
     device.end_command_buffer( *command_buffer )?;
