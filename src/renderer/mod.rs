@@ -155,9 +155,14 @@ impl App {
   unsafe fn destroy( &mut self ) {
     self.destroy_swapchain();
 
+    self.device.destroy_image( self.data.texture_image, None );
+    self.device.free_memory( self.data.texture_image_memory, None );
+
     self.device.destroy_descriptor_set_layout( self.data.descriptor_set_layout, None );
+
     self.device.destroy_buffer( self.data.vertex_buffer, None );
     self.device.free_memory( self.data.vertex_buffer_memory, None );
+
     self.device.destroy_buffer( self.data.index_buffer, None );
     self.device.free_memory( self.data.index_buffer_memory, None );
 
@@ -1059,20 +1064,26 @@ unsafe fn create_image(
   let image = device.create_image( &info, None )?;
   let requirements = device.get_image_memory_requirements( image );
 
-
   let info = vk::MemoryAllocateInfo::builder()
     .allocation_size( requirements.size )
     .memory_type_index( get_memory_type_index( instance, data, properties, requirements )? );
 
   let image_memory = device.allocate_memory( &info, None )?;
 
-  device.bind_image_memory( data.texture_image, data.texture_image_memory, 0 )?;
+  device.bind_image_memory( image, image_memory, 0 )?;
 
   Ok((image, image_memory))
 }
 
 unsafe fn create_texture_image( instance:&Instance, device:&Device, data:&mut AppData ) -> Result<()> {
-  let image = File::open( "resources/texture.png" )?;
+  let image = match File::open( "src/resources/texture.png" ) {
+    Ok( file ) => file,
+    Err( err ) => {
+      println!( "Current path: {:?}", std::env::current_dir() );
+      println!( "{:?}", err );
+      return Err( anyhow!( err ) );
+    }
+  };
 
   let decoder = png::Decoder::new( image );
   let mut reader = decoder.read_info()?;
@@ -1089,12 +1100,7 @@ unsafe fn create_texture_image( instance:&Instance, device:&Device, data:&mut Ap
     vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
   )?;
 
-  let memory = device.map_memory(
-    stagging_buffer_memory,
-    0,
-    size,
-    vk::MemoryMapFlags::empty(),
-  )?;
+  let memory = device.map_memory( stagging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
 
   memcpy( pixels.as_ptr(), memory.cast(), pixels.len() );
 
@@ -1112,36 +1118,51 @@ unsafe fn create_texture_image( instance:&Instance, device:&Device, data:&mut Ap
   data.texture_image_memory = texture_image_memory;
 
   transition_image_layout(
-    device,
-    data,
-    data.texture_image,
+    device, data, data.texture_image,
     vk::Format::R8G8B8A8_SRGB,
     vk::ImageLayout::UNDEFINED,
     vk::ImageLayout::TRANSFER_DST_OPTIMAL,
   )?;
 
-  copy_buffer_to_image(
-    device,
-    data,
-    stagging_buffer,
-    data.texture_image,
-    width,
-    height
-  )?;
+  copy_buffer_to_image( device, data, stagging_buffer, data.texture_image, width, height )?;
 
   transition_image_layout(
-    device,
-    data,
-    data.texture_image,
+    device, data, data.texture_image,
     vk::Format::R8G8B8A8_SRGB,
     vk::ImageLayout::TRANSFER_DST_OPTIMAL,
     vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
   )?;
 
+  device.destroy_buffer( stagging_buffer, None );
+  device.free_memory( stagging_buffer_memory, None );
+
   Ok(())
 }
 
 unsafe fn transition_image_layout( device:&Device, data:&mut AppData, image:vk::Image, format:vk::Format, old_layout:vk::ImageLayout, new_layout:vk::ImageLayout ) -> Result<()> {
+  let (
+    src_access_mask,
+    dst_access_mask,
+    src_stage_mask,
+    dst_stage_mask,
+  ) = match (old_layout, new_layout) {
+    (vk::ImageLayout::UNDEFINED, vk::ImageLayout::TRANSFER_DST_OPTIMAL) => (
+      vk::AccessFlags::empty(),
+      vk::AccessFlags::TRANSFER_WRITE,
+      vk::PipelineStageFlags::TOP_OF_PIPE,
+      vk::PipelineStageFlags::TRANSFER,
+    ),
+
+    (vk::ImageLayout::TRANSFER_DST_OPTIMAL, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL) => (
+      vk::AccessFlags::TRANSFER_WRITE,
+      vk::AccessFlags::SHADER_READ,
+      vk::PipelineStageFlags::TRANSFER,
+      vk::PipelineStageFlags::FRAGMENT_SHADER,
+    ),
+
+    _ => return Err( anyhow!( "unsupported image layout transition!" ) )
+  };
+
   let command_buffer = begin_single_time_commands( device, data )?;
 
   let subresource = vk::ImageSubresourceRange::builder()
@@ -1158,13 +1179,13 @@ unsafe fn transition_image_layout( device:&Device, data:&mut AppData, image:vk::
     .dst_queue_family_index( vk::QUEUE_FAMILY_IGNORED )
     .image( image )
     .subresource_range( subresource )
-    .src_access_mask( vk::AccessFlags::empty() )
-    .dst_access_mask( vk::AccessFlags::empty() );
+    .src_access_mask( src_access_mask )
+    .dst_access_mask( dst_access_mask );
 
   device.cmd_pipeline_barrier(
     command_buffer,
-    vk::PipelineStageFlags::empty(),
-    vk::PipelineStageFlags::empty(),
+    src_stage_mask,
+    dst_stage_mask,
     vk::DependencyFlags::empty(),
     &[] as &[ vk::MemoryBarrier ],
     &[] as &[ vk::BufferMemoryBarrier ],
