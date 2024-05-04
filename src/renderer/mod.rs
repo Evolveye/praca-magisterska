@@ -26,10 +26,12 @@ use winit::event::{ Event, WindowEvent };
 use winit::event_loop::{ ControlFlow, EventLoop };
 use winit::window::{ Window, WindowBuilder };
 
-use std::collections::HashSet;
-use std::ffi::CStr;
+use std::collections::{ HashMap, HashSet };
+use std::hash::{ Hash, Hasher };
+use std::io::BufReader;
 use std::fs::File;
 use std::os::raw::c_void;
+use std::ffi::CStr;
 use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
 use std::time::Instant;
@@ -144,9 +146,10 @@ impl App {
     create_command_pool( &instance, &device, &mut data )?;
     create_depth_objects( &instance, &device, &mut data )?;
     create_framebuffers( &device, &mut data )?;
-    create_texture_image( &instance, &device, &mut data )?;
+    create_texture_image( &instance, &device, &mut data, "src/resources/viking_room.png" )?;
     create_texture_image_view( &device, &mut data )?;
     create_texture_sampler( &device, &mut data )?;
+    load_model( &mut data, "src/resources/viking_room.obj" )?;
     create_vertex_buffer( &instance, &device, &mut data )?;
     create_index_buffer( &instance, &device, &mut data )?;
     create_uniform_buffers( &instance, &device, &mut data )?;
@@ -371,6 +374,8 @@ struct AppData {
   render_finished_semaphores: Vec<vk::Semaphore>,
   in_flight_fences: Vec<vk::Fence>,
   images_in_flight: Vec<vk::Fence>,
+  vertices: Vec<Vertex>,
+  indices: Vec<u32>,
   vertex_buffer: vk::Buffer,
   vertex_buffer_memory: vk::DeviceMemory,
   index_buffer: vk::Buffer,
@@ -494,6 +499,27 @@ impl Vertex {
   }
 }
 
+impl PartialEq for Vertex {
+  fn eq( &self, other:&Self ) -> bool {
+    self.pos == other.pos && self.color == other.color && self.tex_coord == other.tex_coord
+  }
+}
+
+impl Eq for Vertex {}
+
+impl Hash for Vertex {
+  fn hash<H:Hasher>( &self, state:&mut H ) {
+    self.pos[ 0 ].to_bits().hash( state );
+    self.pos[ 1 ].to_bits().hash( state );
+    self.pos[ 2 ].to_bits().hash( state );
+    self.color[ 0 ].to_bits().hash( state );
+    self.color[ 1 ].to_bits().hash( state );
+    self.color[ 2 ].to_bits().hash( state );
+    self.tex_coord[ 0 ].to_bits().hash( state );
+    self.tex_coord[ 1 ].to_bits().hash( state );
+  }
+}
+
 
 
 #[repr(C)]
@@ -504,6 +530,51 @@ struct UniformBufferObject {
   proj: Mat4,
 }
 
+
+fn load_model( data:&mut AppData, src:&str ) -> Result<()> {
+  // let mut unique_vertices = HashMap::new();
+  let mut reader = BufReader::new( File::open( src )? );
+
+  let ( models, _ ) = tobj::load_obj_buf(
+    &mut reader,
+    &tobj::LoadOptions { triangulate: true, ..Default::default() },
+    |_| std::result::Result::Ok( Default::default() ),
+  )?;
+
+  for model in models {
+    for index in model.mesh.indices {
+      let pos_offset = (3 * index) as usize;
+      let tex_coord_offset = (2 * index) as usize;
+
+      let vertex = Vertex {
+        pos: vec3(
+          model.mesh.positions[ pos_offset + 0 ],
+          model.mesh.positions[ pos_offset + 1 ],
+          model.mesh.positions[ pos_offset + 2 ],
+        ),
+        color: vec3( 1.0, 1.0, 1.0 ),
+        tex_coord: vec2(
+          model.mesh.texcoords[ tex_coord_offset + 0 ],
+          1.0 -model.mesh.texcoords[ tex_coord_offset + 1 ],
+        ),
+      };
+
+      // if let Some( index ) = unique_vertices.get( &vertex ) {
+      //   data.indices.push( *index as u32 )
+      // } else {
+      //   let index = data.vertices.len();
+      //   unique_vertices.insert( vertex, index );
+      //   data.vertices.push( vertex );
+      //   data.indices.push( index as u32 )
+      // }
+
+      data.vertices.push( vertex );
+      data.indices.push( data.indices.len() as u32 );
+    }
+  }
+
+  Ok(())
+}
 
 unsafe fn create_instance( window:&Window, entry:&Entry, data:&mut AppData ) -> Result<Instance> {
   let application_info = vk::ApplicationInfo::builder()
@@ -1192,8 +1263,8 @@ unsafe fn create_depth_objects( instance:&Instance, device:&Device, data:&mut Ap
   Ok(())
 }
 
-unsafe fn create_texture_image( instance:&Instance, device:&Device, data:&mut AppData ) -> Result<()> {
-  let image = match File::open( "src/resources/texture.png" ) {
+unsafe fn create_texture_image( instance:&Instance, device:&Device, data:&mut AppData, src:&str ) -> Result<()> {
+  let image = match File::open( src ) {
     Ok( file ) => file,
     Err( err ) => {
       println!( "Current path: {:?}", std::env::current_dir() );
@@ -1358,7 +1429,7 @@ unsafe fn transition_image_layout( device:&Device, data:&mut AppData, image:vk::
 }
 
 unsafe fn create_vertex_buffer( instance:&Instance, device:&Device, data:&mut AppData ) -> Result<()> {
-  let size = (size_of::<Vertex>() * VERTICES.len()) as u64;
+  let size = (size_of::<Vertex>() * data.vertices.len()) as u64;
   let ( staging_buffer, staging_buffer_memory ) = create_buffer(
     instance,
     device,
@@ -1370,7 +1441,7 @@ unsafe fn create_vertex_buffer( instance:&Instance, device:&Device, data:&mut Ap
 
   let memory = device.map_memory( staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
 
-  memcpy( VERTICES.as_ptr(), memory.cast(), VERTICES.len() );
+  memcpy( data.vertices.as_ptr(), memory.cast(), data.vertices.len() );
   device.unmap_memory( staging_buffer_memory );
 
   let ( vertex_buffer, vertex_buffer_memory ) = create_buffer(
@@ -1394,7 +1465,7 @@ unsafe fn create_vertex_buffer( instance:&Instance, device:&Device, data:&mut Ap
 }
 
 unsafe fn create_index_buffer( instance:&Instance, device:&Device, data:&mut AppData ) -> Result<()> {
-  let size = (size_of::<u16>() * INDICES.len()) as u64;
+  let size = (size_of::<u32>() * data.indices.len()) as u64;
   let ( staging_buffer, staging_buffer_memory ) = create_buffer(
     instance,
     device,
@@ -1406,7 +1477,7 @@ unsafe fn create_index_buffer( instance:&Instance, device:&Device, data:&mut App
 
   let memory = device.map_memory( staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
 
-  memcpy( INDICES.as_ptr(), memory.cast(), INDICES.len() );
+  memcpy( data.indices.as_ptr(), memory.cast(), data.indices.len() );
   device.unmap_memory( staging_buffer_memory );
 
   let ( index_buffer, index_buffer_memory ) = create_buffer(
@@ -1557,7 +1628,7 @@ unsafe fn create_command_buffers( device:&Device, data:&mut AppData ) -> Result<
     device.cmd_begin_render_pass( *command_buffer, &render_pass_begin, vk::SubpassContents::INLINE );
     device.cmd_bind_pipeline( *command_buffer, vk::PipelineBindPoint::GRAPHICS, data.pipeline );
     device.cmd_bind_vertex_buffers( *command_buffer, 0, &[ data.vertex_buffer ], &[ 0 ] );
-    device.cmd_bind_index_buffer( *command_buffer, data.index_buffer, 0, vk::IndexType::UINT16 );
+    device.cmd_bind_index_buffer( *command_buffer, data.index_buffer, 0, vk::IndexType::UINT32 );
 
     device.cmd_bind_descriptor_sets(
       *command_buffer,
@@ -1568,7 +1639,7 @@ unsafe fn create_command_buffers( device:&Device, data:&mut AppData ) -> Result<
       &[]
     );
 
-    device.cmd_draw_indexed( *command_buffer, INDICES.len() as u32, 1, 0, 0, 0 );
+    device.cmd_draw_indexed( *command_buffer, data.indices.len() as u32, 1, 0, 0, 0 );
     device.cmd_end_render_pass( *command_buffer );
 
     device.end_command_buffer( *command_buffer )?;
