@@ -269,6 +269,8 @@ impl App {
     }
 
     self.data.images_in_flight[ image_index ] = self.data.in_flight_fences[ self.frame ];
+
+    self.update_command_buffer( image_index )?;
     self.update_uniform_buffer( image_index )?;
 
     let wait_semaphores = &[ self.data.image_available_semaphores[ self.frame ] ];
@@ -311,13 +313,6 @@ impl App {
   }
 
   unsafe fn update_uniform_buffer( &self, image_index:usize ) -> Result<()> {
-    let time = self.start.elapsed().as_secs_f32();
-
-    let model = Mat4::from_axis_angle(
-      vec3( 0.0, 0.0, 1.0 ),
-      Deg( 90.0 ) * time
-    );
-
     let view = Mat4::look_at_rh(
       point3( 2.0, 2.0, 2.0 ),
       point3( 0.0, 0.0, 0.0 ),
@@ -331,14 +326,14 @@ impl App {
       0.0,  0.0, 1.0 / 2.0, 1.0,
     );
 
-    let mut proj = correction * cgmath::perspective(
+    let proj = correction * cgmath::perspective(
       Deg( 45.0 ),
       self.data.swapchain_extent.width as f32 / self.data.swapchain_extent.height as f32,
       0.1,
       10.0,
     );
 
-    let ubo = UniformBufferObject { model, view, proj };
+    let ubo = UniformBufferObject { view, proj };
 
     let memory = self.device.map_memory(
       self.data.uniform_buffers_memory[ image_index ],
@@ -350,6 +345,93 @@ impl App {
     memcpy( &ubo, memory.cast(), 1 );
 
     self.device.unmap_memory( self.data.uniform_buffers_memory[ image_index ] );
+
+    Ok(())
+  }
+
+  unsafe fn update_command_buffer( &mut self, image_index:usize ) -> Result<()> {
+    let command_buffer = self.data.command_buffers[ image_index ];
+
+    self.device.reset_command_buffer( command_buffer, vk::CommandBufferResetFlags::empty() )?;
+
+    let time = self.start.elapsed().as_secs_f32();
+
+    let model = Mat4::from_axis_angle(
+      vec3( 0.0, 0.0, 1.0 ),
+      Deg( 90.0 ) * time,
+    );
+
+    let model_bytes = std::slice::from_raw_parts(
+      &model as *const Mat4 as *const u8,
+      size_of::<Mat4>()
+    );
+
+    let inheritance = vk::CommandBufferInheritanceInfo::builder();
+
+    let begin_info = vk::CommandBufferBeginInfo::builder()
+      .flags( vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT )
+      .inheritance_info( &inheritance );
+
+    self.device.begin_command_buffer( command_buffer, &begin_info )?;
+
+    let render_area = vk::Rect2D::builder()
+      .offset( vk::Offset2D::default() )
+      .extent( self.data.swapchain_extent );
+
+    let color_clear_value = vk::ClearValue {
+      color: vk::ClearColorValue {
+        float32: [ 0.0, 0.0, 0.0, 1.0 ],
+      },
+    };
+
+    let depth_clear_value = vk::ClearValue {
+      depth_stencil: vk::ClearDepthStencilValue {
+        depth: 1.0,
+        stencil: 0,
+      }
+    };
+
+    let clear_values = &[ color_clear_value, depth_clear_value ];
+    let render_pass_begin = vk::RenderPassBeginInfo::builder()
+      .render_pass( self.data.render_pass )
+      .framebuffer( self.data.framebuffers[ image_index ])
+      .render_area( render_area )
+      .clear_values( clear_values );
+
+    self.device.cmd_begin_render_pass( command_buffer, &render_pass_begin, vk::SubpassContents::INLINE );
+    self.device.cmd_bind_pipeline( command_buffer, vk::PipelineBindPoint::GRAPHICS, self.data.pipeline );
+    self.device.cmd_bind_vertex_buffers( command_buffer, 0, &[ self.data.vertex_buffer ], &[ 0 ] );
+    self.device.cmd_bind_index_buffer( command_buffer, self.data.index_buffer, 0, vk::IndexType::UINT32 );
+
+    self.device.cmd_bind_descriptor_sets(
+      command_buffer,
+      vk::PipelineBindPoint::GRAPHICS,
+      self.data.pipeline_layout,
+      0,
+      &[ self.data.descriptor_sets[ image_index ] ],
+      &[]
+    );
+
+    self.device.cmd_push_constants(
+      command_buffer,
+      self.data.pipeline_layout,
+      vk::ShaderStageFlags::VERTEX,
+      0,
+      model_bytes,
+    );
+
+    self.device.cmd_push_constants(
+      command_buffer,
+      self.data.pipeline_layout,
+      vk::ShaderStageFlags::FRAGMENT,
+      64,
+      &0.25f32.to_ne_bytes()[..],
+    );
+
+    self.device.cmd_draw_indexed( command_buffer, self.data.indices.len() as u32, 1, 0, 0, 0 );
+    self.device.cmd_end_render_pass( command_buffer );
+
+    self.device.end_command_buffer( command_buffer )?;
 
     Ok(())
   }
@@ -536,7 +618,6 @@ impl Hash for Vertex {
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 struct UniformBufferObject {
-  model: Mat4,
   view: Mat4,
   proj: Mat4,
 }
@@ -1069,9 +1150,9 @@ unsafe fn create_pipeline( device:&Device, data:&mut AppData ) -> Result<()> {
 
   let attachment = vk::PipelineColorBlendAttachmentState::builder()
     .color_write_mask( vk::ColorComponentFlags::all() )
-    .blend_enable( false )
-    .src_color_blend_factor( vk::BlendFactor::ONE )
-    .dst_color_blend_factor( vk::BlendFactor::ZERO )
+    .blend_enable( true )
+    .src_color_blend_factor( vk::BlendFactor::SRC_ALPHA )
+    .dst_color_blend_factor( vk::BlendFactor::ONE_MINUS_SRC_ALPHA )
     .color_blend_op( vk::BlendOp::ADD )
     .src_alpha_blend_factor( vk::BlendFactor::ONE )
     .dst_alpha_blend_factor( vk::BlendFactor::ZERO )
@@ -1084,9 +1165,21 @@ unsafe fn create_pipeline( device:&Device, data:&mut AppData ) -> Result<()> {
     .attachments( attachments )
     .blend_constants([ 0.0, 0.0, 0.0, 0.0 ]);
 
+  let vert_push_constant_range = vk::PushConstantRange::builder()
+    .stage_flags( vk::ShaderStageFlags::VERTEX )
+    .offset( 0 )
+    .size( 64 );
+
+  let frag_push_constant_range = vk::PushConstantRange::builder()
+    .stage_flags( vk::ShaderStageFlags::FRAGMENT )
+    .offset( 64 )
+    .size( 4 );
+
   let set_layouts = &[ data.descriptor_set_layout ];
+  let push_constant_ranges = &[ vert_push_constant_range, frag_push_constant_range ];
   let layout_info = vk::PipelineLayoutCreateInfo::builder()
-    .set_layouts( set_layouts );
+    .set_layouts( set_layouts )
+    .push_constant_ranges( push_constant_ranges );
 
   data.pipeline_layout = device.create_pipeline_layout( &layout_info, None )?;
 
@@ -1147,7 +1240,7 @@ unsafe fn create_command_pool( instance:&Instance, device:&Device, data:&mut App
   let indices = QueueFamilyIndices::get( instance, data, data.physical_device )?;
 
   let info = vk::CommandPoolCreateInfo::builder()
-    .flags( vk::CommandPoolCreateFlags::empty() )
+    .flags( vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER )
     .queue_family_index( indices.graphics );
 
   data.command_pool = device.create_command_pool( &info, None )?;
@@ -1800,59 +1893,6 @@ unsafe fn create_command_buffers( device:&Device, data:&mut AppData ) -> Result<
     .command_buffer_count( data.framebuffers.len() as u32 );
 
   data.command_buffers = device.allocate_command_buffers( &allocate_info )?;
-
-  for (i, command_buffer) in data.command_buffers.iter().enumerate() {
-    let inheritance = vk::CommandBufferInheritanceInfo::builder();
-
-    let begin_info = vk::CommandBufferBeginInfo::builder()
-      .flags( vk::CommandBufferUsageFlags::empty() )
-      .inheritance_info( &inheritance );
-
-    device.begin_command_buffer( *command_buffer, &begin_info )?;
-
-    let render_area = vk::Rect2D::builder()
-      .offset( vk::Offset2D::default() )
-      .extent( data.swapchain_extent );
-
-    let color_clear_value = vk::ClearValue {
-      color: vk::ClearColorValue {
-        float32: [ 0.0, 0.0, 0.0, 1.0 ],
-      },
-    };
-
-    let depth_clear_value = vk::ClearValue {
-      depth_stencil: vk::ClearDepthStencilValue {
-        depth: 1.0,
-        stencil: 0,
-      }
-    };
-
-    let clear_values = &[ color_clear_value, depth_clear_value ];
-    let render_pass_begin = vk::RenderPassBeginInfo::builder()
-      .render_pass( data.render_pass )
-      .framebuffer( data.framebuffers[ i ])
-      .render_area( render_area )
-      .clear_values( clear_values );
-
-    device.cmd_begin_render_pass( *command_buffer, &render_pass_begin, vk::SubpassContents::INLINE );
-    device.cmd_bind_pipeline( *command_buffer, vk::PipelineBindPoint::GRAPHICS, data.pipeline );
-    device.cmd_bind_vertex_buffers( *command_buffer, 0, &[ data.vertex_buffer ], &[ 0 ] );
-    device.cmd_bind_index_buffer( *command_buffer, data.index_buffer, 0, vk::IndexType::UINT32 );
-
-    device.cmd_bind_descriptor_sets(
-      *command_buffer,
-      vk::PipelineBindPoint::GRAPHICS,
-      data.pipeline_layout,
-      0,
-      &[ data.descriptor_sets[ i ] ],
-      &[]
-    );
-
-    device.cmd_draw_indexed( *command_buffer, data.indices.len() as u32, 1, 0, 0, 0 );
-    device.cmd_end_render_pass( *command_buffer );
-
-    device.end_command_buffer( *command_buffer )?;
-  }
 
   Ok(())
 }
