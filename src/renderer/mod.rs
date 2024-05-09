@@ -1445,7 +1445,7 @@ unsafe fn generate_mipmaps( instance:&Instance, device:&Device, data:&mut AppDat
   barrier.old_layout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
   barrier.new_layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
   barrier.src_access_mask = vk::AccessFlags::TRANSFER_WRITE;
-  barrier.dst_access_mask = vk::AccessFlags::TRANSFER_READ;
+  barrier.dst_access_mask = vk::AccessFlags::SHADER_READ;
 
   device.cmd_pipeline_barrier(
     command_buffer,
