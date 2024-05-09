@@ -543,7 +543,7 @@ struct UniformBufferObject {
 
 
 fn load_model( data:&mut AppData, src:&str ) -> Result<()> {
-  // let mut unique_vertices = HashMap::new();
+  let mut unique_vertices = HashMap::new();
   let mut reader = BufReader::new( File::open( src )? );
 
   let ( models, _ ) = tobj::load_obj_buf(
@@ -570,17 +570,17 @@ fn load_model( data:&mut AppData, src:&str ) -> Result<()> {
         ),
       };
 
-      // if let Some( index ) = unique_vertices.get( &vertex ) {
-      //   data.indices.push( *index as u32 )
-      // } else {
-      //   let index = data.vertices.len();
-      //   unique_vertices.insert( vertex, index );
-      //   data.vertices.push( vertex );
-      //   data.indices.push( index as u32 )
-      // }
+      if let Some( index ) = unique_vertices.get( &vertex ) {
+        data.indices.push( *index as u32 )
+      } else {
+        let index = data.vertices.len();
+        unique_vertices.insert( vertex, index );
+        data.vertices.push( vertex );
+        data.indices.push( index as u32 )
+      }
 
-      data.vertices.push( vertex );
-      data.indices.push( data.indices.len() as u32 );
+      // data.vertices.push( vertex );
+      // data.indices.push( data.indices.len() as u32 );
     }
   }
 
