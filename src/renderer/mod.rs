@@ -439,9 +439,9 @@ impl App {
     let z = (((model_index / 2) as f32) * -2.0) + 1.0;
     let time = self.start.elapsed().as_secs_f32();
 
-    let model = Mat4::from_translation( vec3( 0.0, y, z ) ) + Mat4::from_axis_angle(
+    let model = Mat4::from_translation( vec3( 0.0, y, z ) ) * Mat4::from_axis_angle(
       vec3( 0.0, 0.0, 1.0 ),
-      Deg( 90.0 ) * time,
+      Deg( 90.0 ) * time
     );
 
     let model_bytes = std::slice::from_raw_parts(
@@ -1968,7 +1968,7 @@ unsafe fn create_command_buffers( device:&Device, data:&mut AppData ) -> Result<
       .level( vk::CommandBufferLevel::PRIMARY )
       .command_buffer_count( data.framebuffers.len() as u32 );
 
-    data.command_buffers = device.allocate_command_buffers( &allocate_info )?;
+    data.command_buffers.push( device.allocate_command_buffers( &allocate_info )?[ 0 ] );
   }
 
   data.secondary_command_buffers = vec![ vec![]; data.swapchain_images.len() ];
