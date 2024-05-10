@@ -143,7 +143,7 @@ impl App {
     create_render_pass( &instance, &device, &mut data )?;
     create_descriptor_set_layout( &device, &mut data )?;
     create_pipeline( &device, &mut data )?;
-    create_command_pool( &instance, &device, &mut data )?;
+    create_command_pools( &instance, &device, &mut data )?;
     create_color_objects( &instance, &device, &mut data )?;
     create_depth_objects( &instance, &device, &mut data )?;
     create_framebuffers( &device, &mut data )?;
@@ -168,6 +168,8 @@ impl App {
   }
 
   unsafe fn destroy( &mut self ) {
+    self.device.device_wait_idle().unwrap();
+
     self.destroy_swapchain();
 
     self.device.destroy_sampler( self.data.texture_sampler, None );
@@ -187,6 +189,7 @@ impl App {
     self.data.in_flight_fences.iter().for_each( |f| self.device.destroy_fence( *f, None ) );
     self.data.render_finished_semaphores.iter().for_each( |s| self.device.destroy_semaphore( *s, None ) );
     self.data.image_available_semaphores.iter().for_each( |s| self.device.destroy_semaphore( *s, None ) );
+    self.data.command_pools.iter().for_each( |f| self.device.destroy_command_pool( *f, None ) );
 
     self.device.destroy_command_pool( self.data.command_pool, None );
     self.device.destroy_device( None );
@@ -221,8 +224,6 @@ impl App {
   }
 
   unsafe fn destroy_swapchain( &mut self ) {
-    self.device.free_command_buffers( self.data.command_pool, &self.data.command_buffers );
-
     self.device.destroy_descriptor_pool( self.data.descriptor_pool, None );
     self.data.uniform_buffers_memory.iter().for_each( |m| self.device.free_memory( *m, None ) );
     self.data.uniform_buffers.iter().for_each( |b| self.device.destroy_buffer( *b, None ) );
@@ -350,9 +351,10 @@ impl App {
   }
 
   unsafe fn update_command_buffer( &mut self, image_index:usize ) -> Result<()> {
-    let command_buffer = self.data.command_buffers[ image_index ];
+    let command_pool = self.data.command_pools[ image_index ];
+    self.device.reset_command_pool( command_pool, vk::CommandPoolResetFlags::empty() )?;
 
-    self.device.reset_command_buffer( command_buffer, vk::CommandBufferResetFlags::empty() )?;
+    let command_buffer = self.data.command_buffers[ image_index ];
 
     let time = self.start.elapsed().as_secs_f32();
 
@@ -458,6 +460,7 @@ struct AppData {
   pipeline: vk::Pipeline,
   framebuffers: Vec<vk::Framebuffer>,
   command_pool: vk::CommandPool,
+  command_pools: Vec<vk::CommandPool>,
   command_buffers: Vec<vk::CommandBuffer>,
   image_available_semaphores: Vec<vk::Semaphore>,
   render_finished_semaphores: Vec<vk::Semaphore>,
@@ -1236,14 +1239,22 @@ unsafe fn create_framebuffers( device:&Device, data:&mut AppData ) -> Result<()>
   Ok(())
 }
 
-unsafe fn create_command_pool( instance:&Instance, device:&Device, data:&mut AppData ) -> Result<()> {
+unsafe fn create_command_pool( instance:&Instance, device:&Device, data:&AppData ) -> Result<vk::CommandPool> {
   let indices = QueueFamilyIndices::get( instance, data, data.physical_device )?;
 
   let info = vk::CommandPoolCreateInfo::builder()
-    .flags( vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER )
+    .flags( vk::CommandPoolCreateFlags::TRANSIENT )
     .queue_family_index( indices.graphics );
 
-  data.command_pool = device.create_command_pool( &info, None )?;
+  Ok( device.create_command_pool( &info, None )? )
+}
+
+unsafe fn create_command_pools( instance:&Instance, device:&Device, data:&mut AppData ) -> Result<()> {
+  data.command_pool = create_command_pool( instance, device, data )?;
+
+  for _ in 0..data.swapchain_images.len() {
+    data.command_pools.push( create_command_pool( instance, device, data )? );
+  }
 
   Ok(())
 }
@@ -1887,12 +1898,14 @@ unsafe fn create_descriptor_sets( device:&Device, data:&mut AppData ) -> Result<
 }
 
 unsafe fn create_command_buffers( device:&Device, data:&mut AppData ) -> Result<()> {
-  let allocate_info = vk::CommandBufferAllocateInfo::builder()
-    .command_pool( data.command_pool )
-    .level( vk::CommandBufferLevel::PRIMARY )
-    .command_buffer_count( data.framebuffers.len() as u32 );
+  for image_index in 0..data.swapchain_images.len() {
+    let allocate_info = vk::CommandBufferAllocateInfo::builder()
+      .command_pool( data.command_pools[ image_index ] )
+      .level( vk::CommandBufferLevel::PRIMARY )
+      .command_buffer_count( data.framebuffers.len() as u32 );
 
-  data.command_buffers = device.allocate_command_buffers( &allocate_info )?;
+    data.command_buffers = device.allocate_command_buffers( &allocate_info )?;
+  }
 
   Ok(())
 }
