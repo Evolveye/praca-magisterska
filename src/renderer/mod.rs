@@ -50,20 +50,39 @@ const DEVICE_EXTENSIONS:&[ vk::ExtensionName ] = &[ vk::KHR_SWAPCHAIN_EXTENSION.
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
 static VERTICES:[ Vertex; 8 ] = [
-  Vertex::new( vec3( -0.5, -0.5, 0.0 ), vec3( 1.0, 0.0, 0.0 ), vec2( 1.0, 0.0 ) ),
-  Vertex::new( vec3(  0.5, -0.5, 0.0 ), vec3( 0.0, 1.0, 0.0 ), vec2( 0.0, 0.0 ) ),
-  Vertex::new( vec3(  0.5,  0.5, 0.0 ), vec3( 0.0, 0.0, 1.0 ), vec2( 0.0, 1.0 ) ),
-  Vertex::new( vec3( -0.5,  0.5, 0.0 ), vec3( 1.0, 1.0, 1.0 ), vec2( 1.0, 1.0 ) ),
+  // Vertex::new( vec3( -1.0, -1.0, -1.0 ), vec3( 1.0, 0.0, 0.0 ), vec2( 1.0, 0.0 ) ),
+  // Vertex::new( vec3(  1.0, -1.0, -1.0 ), vec3( 0.0, 1.0, 0.0 ), vec2( 0.0, 0.0 ) ),
+  // Vertex::new( vec3(  1.0, -1.0,  1.0 ), vec3( 0.0, 1.0, 0.0 ), vec2( 0.0, 0.0 ) ),
+  // Vertex::new( vec3( -1.0, -1.0,  1.0 ), vec3( 1.0, 0.0, 0.0 ), vec2( 1.0, 0.0 ) ),
 
-  Vertex::new( vec3( -0.5, -0.5, -0.5 ), vec3( 1.0, 0.0, 0.0 ), vec2( 1.0, 0.0 ) ),
-  Vertex::new( vec3(  0.5, -0.5, -0.5 ), vec3( 0.0, 1.0, 0.0 ), vec2( 0.0, 0.0 ) ),
-  Vertex::new( vec3(  0.5,  0.5, -0.5 ), vec3( 0.0, 0.0, 1.0 ), vec2( 0.0, 1.0 ) ),
-  Vertex::new( vec3( -0.5,  0.5, -0.5 ), vec3( 1.0, 1.0, 1.0 ), vec2( 1.0, 1.0 ) ),
+  // Vertex::new( vec3( -1.0,  1.0, -1.0 ), vec3( 0.0, 0.0, 1.0 ), vec2( 0.0, 1.0 ) ),
+  // Vertex::new( vec3(  1.0,  1.0, -1.0 ), vec3( 1.0, 1.0, 1.0 ), vec2( 1.0, 1.0 ) ),
+  // Vertex::new( vec3(  1.0,  1.0,  1.0 ), vec3( 1.0, 1.0, 1.0 ), vec2( 1.0, 1.0 ) ),
+  // Vertex::new( vec3( -1.0,  1.0,  1.0 ), vec3( 0.0, 0.0, 1.0 ), vec2( 0.0, 1.0 ) ),
+
+  Vertex::new( vec3(  1.0, -1.0, -1.0 ), vec3( 0.0, 1.0, 0.0 ), vec2( 0.0, 0.0 ) ),
+  Vertex::new( vec3(  1.0, -1.0,  1.0 ), vec3( 0.0, 1.0, 0.0 ), vec2( 0.0, 0.0 ) ),
+  Vertex::new( vec3( -1.0, -1.0,  1.0 ), vec3( 1.0, 0.0, 0.0 ), vec2( 1.0, 0.0 ) ),
+  Vertex::new( vec3( -1.0, -1.0, -1.0 ), vec3( 1.0, 0.0, 0.0 ), vec2( 1.0, 0.0 ) ),
+
+  Vertex::new( vec3(  1.0,  1.0, -1.0 ), vec3( 1.0, 1.0, 1.0 ), vec2( 1.0, 1.0 ) ),
+  Vertex::new( vec3(  1.0,  1.0,  1.0 ), vec3( 1.0, 1.0, 1.0 ), vec2( 1.0, 1.0 ) ),
+  Vertex::new( vec3( -1.0,  1.0,  1.0 ), vec3( 0.0, 0.0, 1.0 ), vec2( 0.0, 1.0 ) ),
+  Vertex::new( vec3( -1.0,  1.0, -1.0 ), vec3( 0.0, 0.0, 1.0 ), vec2( 0.0, 1.0 ) ),
 ];
 
-const INDICES:&[ u16 ] = &[
-  0, 1, 2, 2, 3, 0,
-  4, 5, 6, 6, 7, 4,
+const INDICES:&[ u32 ] = &[
+  1, 2, 0, 2, 3, 0, // bottom
+  5, 4, 6, 4, 7, 6, // up
+  1, 0, 5, 0, 4, 5, // back
+  0, 3, 4, 3, 7, 4, // left
+  3, 2, 7, 2, 6, 7, // front
+  2, 1, 6, 1, 5, 6, // right
+
+  // 1, 2, 3,
+  // 7, 6, 5,
+  // 4, 5, 1,
+  // 5, 6, 2,
 ];
 
 
@@ -162,10 +181,15 @@ impl App {
     create_color_objects( &instance, &device, &mut data )?;
     create_depth_objects( &instance, &device, &mut data )?;
     create_framebuffers( &device, &mut data )?;
-    create_texture_image( &instance, &device, &mut data, "src/resources/viking_room.png" )?;
+    // create_texture_image( &instance, &device, &mut data, "src/resources/viking_room.png" )?;
+    create_texture_image( &instance, &device, &mut data, "src/resources/barrel.png" )?;
     create_texture_image_view( &device, &mut data )?;
     create_texture_sampler( &device, &mut data )?;
-    load_model( &mut data, "src/resources/viking_room.obj" )?;
+    // load_model( &mut data, "cube" )?;
+    // load_model( &mut data, "src/resources/cube.obj" )?;
+    // load_model( &mut data, "src/resources/viking_room.obj" )?;
+    load_model( &mut data, "src/resources/barrel.obj" )?;
+    // load_model( &mut data, "src/resources/bunny.obj" )?;
     create_vertex_buffer( &instance, &device, &mut data )?;
     create_index_buffer( &instance, &device, &mut data )?;
     create_uniform_buffers( &instance, &device, &mut data )?;
@@ -330,8 +354,14 @@ impl App {
   }
 
   unsafe fn update_uniform_buffer( &self, image_index:usize ) -> Result<()> {
+    // let view = Mat4::look_at_rh(
+    //   point3( 0.0, 0.0, 6.0 ),
+    //   point3( 0.0, 0.0, 0.0 ),
+    //   vec3( 0.0, 1.0, 0.0 ),
+    // );
+
     let view = Mat4::look_at_rh(
-      point3( 6.0, 0.0, 2.0 ),
+      point3( 0.0, -6.0, 4.0 ),
       point3( 0.0, 0.0, 0.0 ),
       vec3( 0.0, 0.0, 1.0 ),
     );
@@ -435,11 +465,12 @@ impl App {
 
     // Model
 
-    let y = (((model_index % 2) as f32) *  2.5) - 1.25;
-    let z = (((model_index / 2) as f32) * -2.0) + 1.0;
+    let x = (((model_index % 2) as f32) *  2.5) - 1.25;
+    let y = (((model_index / 2) as f32) * -2.5) + 1.0;
     let time = self.start.elapsed().as_secs_f32();
 
-    let model = Mat4::from_translation( vec3( 0.0, y, z ) ) * Mat4::from_axis_angle(
+    let model = Mat4::from_translation( vec3( x, y, 0.0 ) )
+    * Mat4::from_axis_angle(
       vec3( 0.0, 0.0, 1.0 ),
       Deg( 90.0 ) * time
     );
@@ -450,6 +481,7 @@ impl App {
     );
 
     let opacity = (model_index + 1) as f32 * 0.25;
+    // let opacity = (4 - model_index) as f32 * 0.25;
     let opacity_bytes = &opacity.to_ne_bytes()[..];
 
     //
@@ -691,16 +723,39 @@ struct UniformBufferObject {
 
 
 fn load_model( data:&mut AppData, src:&str ) -> Result<()> {
+  if src == "cube" {
+    data.vertices = VERTICES.into();
+    data.indices = INDICES.into();
+    return Ok(())
+  }
+
   let mut unique_vertices = HashMap::new();
   let mut reader = BufReader::new( File::open( src )? );
 
   let ( models, _ ) = tobj::load_obj_buf(
     &mut reader,
-    &tobj::LoadOptions { triangulate: true, ..Default::default() },
+    &tobj::LoadOptions { triangulate:true, single_index:true, ..Default::default() },
     |_| std::result::Result::Ok( Default::default() ),
   )?;
 
+  let get_min_max = |a:(f32, f32), b:f32| (
+    if a.0 > b { b } else { a.0 },
+    if a.1 > b { a.1 } else { b },
+  );
+
   for model in models {
+    let mut min_max_x = (0.0, 0.0);
+    let mut min_max_y = (0.0, 0.0);
+    let mut min_max_z = (0.0, 0.0);
+
+    for index in model.mesh.indices.clone() {
+      let pos_offset = (3 * index) as usize;
+
+      min_max_x = get_min_max( min_max_x, model.mesh.positions[ pos_offset + 0 ] );
+      min_max_y = get_min_max( min_max_x, model.mesh.positions[ pos_offset + 1 ] );
+      min_max_z = get_min_max( min_max_x, model.mesh.positions[ pos_offset + 2 ] );
+    }
+
     for index in model.mesh.indices {
       let pos_offset = (3 * index) as usize;
       let tex_coord_offset = (2 * index) as usize;
@@ -712,10 +767,12 @@ fn load_model( data:&mut AppData, src:&str ) -> Result<()> {
           model.mesh.positions[ pos_offset + 2 ],
         ),
         color: vec3( 1.0, 1.0, 1.0 ),
-        tex_coord: vec2(
-          model.mesh.texcoords[ tex_coord_offset + 0 ],
-          1.0 -model.mesh.texcoords[ tex_coord_offset + 1 ],
-        ),
+        tex_coord: if model.mesh.texcoords.is_empty() { vec2( 0.0, 0.0 ) } else {
+          vec2(
+            model.mesh.texcoords[ tex_coord_offset + 0 ],
+            1.0 - model.mesh.texcoords[ tex_coord_offset + 1 ],
+          )
+        },
       };
 
       if let Some( index ) = unique_vertices.get( &vertex ) {
@@ -726,9 +783,6 @@ fn load_model( data:&mut AppData, src:&str ) -> Result<()> {
         data.vertices.push( vertex );
         data.indices.push( index as u32 )
       }
-
-      // data.vertices.push( vertex );
-      // data.indices.push( data.indices.len() as u32 );
     }
   }
 

@@ -1,4 +1,4 @@
-mod world;
+// mod world;
 mod renderer;
 
 use std::io;
@@ -18,20 +18,20 @@ fn main() {
     // fragment.chunks[ 0 ][ 0 ].blocks[ y as usize ][ x as usize ][ z as usize ].print();
 }
 
-fn read_i16( label:&str ) -> i16 {
-    let mut num_str = String::new();
+// fn read_i16( label:&str ) -> i16 {
+//     let mut num_str = String::new();
 
-    loop {
-        println!( "{label}" );
+//     loop {
+//         println!( "{label}" );
 
-        io::stdin()
-            .read_line(&mut num_str)
-            .expect("Failed to read line");
+//         io::stdin()
+//             .read_line(&mut num_str)
+//             .expect("Failed to read line");
 
-        if let Ok(num) = num_str.trim().parse::<i16>() {
-            return num;
-        } else {
-            println!( "Your data: '{}'", num_str )
-        }
-    }
-}
+//         if let Ok(num) = num_str.trim().parse::<i16>() {
+//             return num;
+//         } else {
+//             println!( "Your data: '{}'", num_str )
+//         }
+//     }
+// }
