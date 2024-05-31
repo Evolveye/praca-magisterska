@@ -8,7 +8,7 @@
 
 
 use anyhow::{anyhow, Result};
-use cgmath::{ point3, Deg, vec2, vec3 };
+use cgmath::{ point3, vec2, vec3, Deg, InnerSpace, Transform };
 use log::*;
 use thiserror::Error;
 
@@ -22,7 +22,7 @@ use vulkanalia::vk::KhrSurfaceExtension;
 use vulkanalia::vk::KhrSwapchainExtension;
 
 use winit::dpi::LogicalSize;
-use winit::event::{ ElementState, Event, WindowEvent };
+use winit::event::{ ElementState, Event, MouseButton, WindowEvent };
 use winit::keyboard::{ PhysicalKey, KeyCode };
 use winit::event_loop::EventLoop;
 use winit::window::{ Window, WindowBuilder };
@@ -128,11 +128,44 @@ pub fn render() -> Result<()> {
           unsafe { app.destroy(); }
         }
 
+        WindowEvent::MouseInput { state, button, .. } => {
+          match (state, button) {
+           (ElementState::Pressed, MouseButton::Left)  => app.control_manager.lmb_pressed = true,
+           (ElementState::Released, MouseButton::Left) => app.control_manager.lmb_pressed = false,
+
+           _ => {}
+          }
+        }
+
+        WindowEvent::CursorMoved { position, .. } => {
+          app.control_manager.mouse_dynamic_position.x = position.x;
+          app.control_manager.mouse_dynamic_position.y = position.y;
+      }
+
         WindowEvent::KeyboardInput { event, .. } => {
           if event.state == ElementState::Pressed {
             match event.physical_key {
-              PhysicalKey::Code( KeyCode::ArrowLeft  ) if app.models > 1 => app.models -= 1,
-              PhysicalKey::Code( KeyCode::ArrowRight ) if app.models < 4 => app.models += 1,
+              PhysicalKey::Code( KeyCode::ArrowLeft  ) | PhysicalKey::Code( KeyCode::KeyA ) => app.control_manager.position_velocity.x = -0.003,
+              PhysicalKey::Code( KeyCode::ArrowRight ) | PhysicalKey::Code( KeyCode::KeyD ) => app.control_manager.position_velocity.x =  0.003,
+              PhysicalKey::Code( KeyCode::ShiftLeft  ) => app.control_manager.position_velocity.y = -0.003,
+              PhysicalKey::Code( KeyCode::Space      ) => app.control_manager.position_velocity.y =  0.003,
+              PhysicalKey::Code( KeyCode::ArrowUp    ) | PhysicalKey::Code( KeyCode::KeyW )  => app.control_manager.position_velocity.z = -0.003,
+              PhysicalKey::Code( KeyCode::ArrowDown  ) | PhysicalKey::Code( KeyCode::KeyS )  => app.control_manager.position_velocity.z =  0.003,
+              PhysicalKey::Code( KeyCode::Digit1 ) => app.models = 1,
+              PhysicalKey::Code( KeyCode::Digit2 ) => app.models = 2,
+              PhysicalKey::Code( KeyCode::Digit3 ) => app.models = 3,
+              PhysicalKey::Code( KeyCode::Digit4 ) => app.models = 4,
+              _ => { }
+            }
+          } else if event.state == ElementState::Released {
+            match event.physical_key {
+              PhysicalKey::Code( KeyCode::ArrowLeft  ) | PhysicalKey::Code( KeyCode::ArrowRight ) |
+              PhysicalKey::Code( KeyCode::KeyA       ) | PhysicalKey::Code( KeyCode::KeyD       ) => app.control_manager.position_velocity.x = 0.0,
+
+              PhysicalKey::Code( KeyCode::ArrowUp    ) | PhysicalKey::Code( KeyCode::ArrowDown  ) |
+              PhysicalKey::Code( KeyCode::KeyW       ) | PhysicalKey::Code( KeyCode::KeyS       ) => app.control_manager.position_velocity.z = 0.0,
+
+              PhysicalKey::Code( KeyCode::ShiftLeft  ) | PhysicalKey::Code( KeyCode::Space )      => app.control_manager.position_velocity.y = 0.0,
               _ => { }
             }
           }
@@ -146,18 +179,83 @@ pub fn render() -> Result<()> {
   Ok(())
 }
 
-
+#[derive(Clone, Debug)]
+struct ControlManager {
+  position: cgmath::Point3<f32>,
+  position_velocity: cgmath::Point3<f32>,
+  target_position: cgmath::Point3<f32>,
+  mouse_position: cgmath::Vector2<f64>,
+  mouse_dynamic_position: cgmath::Vector2<f64>,
+  mouse_last_used_position: cgmath::Vector2<f64>,
+  lmb_pressed: bool,
+}
 
 #[derive(Clone, Debug)]
 struct App {
   models: usize,
   entry: Entry,
+  control_manager: ControlManager,
   instance: Instance,
   data: AppData,
   device: Device,
   frame: usize,
   resized: bool,
   start: Instant,
+}
+
+impl ControlManager {
+  fn new() -> Self {
+    Self {
+      position: point3( 0.0, 0.0, 10.0 ),
+      position_velocity: point3( 0.0, 0.0, 0.0 ),
+      target_position: point3( 0.0, 0.0, 0.0 ),
+      mouse_position: vec2( 0.0, 0.0 ),
+      mouse_dynamic_position: vec2( 0.0, 0.0 ),
+      mouse_last_used_position: vec2( 0.0, 0.0 ),
+      lmb_pressed: false
+    }
+  }
+
+  fn get_distance_from_last_stored_position( &self ) -> cgmath::Vector2<f64> {
+    cgmath::Vector2 {
+      x: self.mouse_dynamic_position.x - self.mouse_last_used_position.x,
+      y: self.mouse_dynamic_position.y - self.mouse_last_used_position.y,
+    }
+  }
+
+  fn update_last_mouse_position( &mut self ) {
+    self.mouse_last_used_position = self.mouse_dynamic_position;
+  }
+
+  fn update_position_by_velocity( &mut self ) {
+    self.position.x += self.position_velocity.x;
+    self.position.y += self.position_velocity.y;
+    self.position.z += self.position_velocity.z;
+  }
+
+  fn update_target_position_by_mouse( &mut self ) {
+    if self.lmb_pressed {
+      return
+    }
+
+    let pos_delta = self.get_distance_from_last_stored_position();
+    let sensitivity = 0.1;
+
+    let horizontal_angle = Deg( pos_delta.x as f32 * sensitivity );
+    let vertical_angle = Deg( pos_delta.y as f32 * sensitivity );
+
+    let up = Vec3::unit_y();
+    let direction = (self.target_position - self.position).normalize();
+    let right = up.cross( direction ).normalize();
+
+    let rotation_horizontal = Mat4::from_axis_angle( up, horizontal_angle );
+    let rotation_vertical = Mat4::from_axis_angle( right, vertical_angle );
+    let rotation = rotation_horizontal * rotation_vertical;
+
+    let new_direction = rotation.transform_vector( direction );
+
+    self.target_position = self.position + new_direction;
+  }
 }
 
 impl App {
@@ -200,10 +298,11 @@ impl App {
 
     Ok( Self {
       entry, instance, data, device,
-      models: 1,
+      models: 4,
       frame: 0,
       resized: false,
       start: Instant::now(),
+      control_manager: ControlManager::new()
     } )
   }
 
@@ -353,18 +452,17 @@ impl App {
     Ok(())
   }
 
-  unsafe fn update_uniform_buffer( &self, image_index:usize ) -> Result<()> {
+  unsafe fn update_uniform_buffer( &mut self, image_index:usize ) -> Result<()> {
     // let view = Mat4::look_at_rh(
     //   point3( 0.0, 0.0, 6.0 ),
     //   point3( 0.0, 0.0, 0.0 ),
     //   vec3( 0.0, 1.0, 0.0 ),
     // );
 
-    let view = Mat4::look_at_rh(
-      point3( 0.0, -6.0, 4.0 ),
-      point3( 0.0, 0.0, 0.0 ),
-      vec3( 0.0, 0.0, 1.0 ),
-    );
+    self.control_manager.update_position_by_velocity();
+    self.control_manager.update_target_position_by_mouse();
+
+    let view = Mat4::look_at_rh( self.control_manager.position, self.control_manager.target_position, Vec3::unit_y() );
 
     let correction = Mat4::new(
       1.0,  0.0,       0.0, 0.0,
@@ -377,8 +475,10 @@ impl App {
       Deg( 45.0 ),
       self.data.swapchain_extent.width as f32 / self.data.swapchain_extent.height as f32,
       0.1,
-      10.0,
+      100.0,
     );
+
+    self.control_manager.update_last_mouse_position();
 
     let ubo = UniformBufferObject { view, proj };
 
@@ -469,8 +569,7 @@ impl App {
     let y = (((model_index / 2) as f32) * -2.5) + 1.0;
     let time = self.start.elapsed().as_secs_f32();
 
-    let model = Mat4::from_translation( vec3( x, y, 0.0 ) )
-    * Mat4::from_axis_angle(
+    let model = Mat4::from_translation( vec3( x, y, 0.0 ) ) * Mat4::from_axis_angle(
       vec3( 0.0, 0.0, 1.0 ),
       Deg( 90.0 ) * time
     );
