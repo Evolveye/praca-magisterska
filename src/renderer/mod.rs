@@ -234,14 +234,14 @@ impl ControlManager {
   }
 
   fn update_target_position_by_mouse( &mut self ) {
-    if self.lmb_pressed {
+    if !self.lmb_pressed {
       return
     }
 
     let pos_delta = self.get_distance_from_last_stored_position();
     let sensitivity = 0.1;
 
-    let horizontal_angle = Deg( pos_delta.x as f32 * sensitivity );
+    let horizontal_angle = Deg( -pos_delta.x as f32 * sensitivity );
     let vertical_angle = Deg( pos_delta.y as f32 * sensitivity );
 
     let up = Vec3::unit_y();
@@ -630,7 +630,6 @@ impl App {
 
     Ok( command_buffer )
   }
-
 }
 
 
