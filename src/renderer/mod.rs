@@ -8,7 +8,7 @@
 
 
 use anyhow::{anyhow, Result};
-use cgmath::{ point2, Point2, point3, Point3, vec2, vec3, Vector3, Deg, InnerSpace, Transform };
+use cgmath::{ point2, Point2, point3, Point3, vec2, vec3, Vector3, Deg, InnerSpace };
 use log::*;
 use thiserror::Error;
 
@@ -22,7 +22,7 @@ use vulkanalia::vk::KhrSurfaceExtension;
 use vulkanalia::vk::KhrSwapchainExtension;
 
 use winit::dpi::{ PhysicalPosition, LogicalSize };
-use winit::event::{ ElementState, Event, MouseButton, WindowEvent };
+use winit::event::{ ElementState, Event, WindowEvent };
 use winit::keyboard::{ PhysicalKey, KeyCode };
 use winit::event_loop::EventLoop;
 use winit::window::{ Window, WindowBuilder };
@@ -109,7 +109,6 @@ pub fn render() -> Result<()> {
 
   event_loop.run( move |event, elwt| {
     match event {
-      // Request a redraw when all events were processed
       Event::AboutToWait => window.request_redraw(),
 
       Event::WindowEvent { event, .. } => match event {
@@ -139,24 +138,6 @@ pub fn render() -> Result<()> {
           elwt.exit();
           unsafe { app.destroy(); }
         }
-
-        // WindowEvent::MouseInput { state, button, .. } => {
-        //   match (button, state) {
-        //     (MouseButton::Left, ElementState::Released) => app.control_manager.lmb_pressed = false,
-        //     (MouseButton::Left, ElementState::Pressed)  => {
-        //       // app.control_manager.mouse_last_used_position = app.control_manager.mouse_position;
-        //       app.control_manager.lmb_pressed = true;
-        //     },
-        //     _ => {}
-        //   }
-        // }
-
-        // WindowEvent::CursorMoved { position, .. } => {
-        //   // app.control_manager.mouse_last_used_position = app.control_manager.mouse_position;
-        //   app.control_manager.mouse_position.x = position.x as f32;
-        //   app.control_manager.mouse_position.y = position.y as f32;
-        //   // app.control_manager.mouse_position.y = position.y as f32;
-        // }
 
         WindowEvent::KeyboardInput { event, .. } => {
           let pressed = event.state == ElementState::Pressed;
@@ -204,7 +185,6 @@ pub fn render() -> Result<()> {
 struct ControlManager {
   position: Point3<f32>,
   velocity: Vector3<f32>,
-  target_position: Point3<f32>,
   rotation: cgmath::Vector2<f32>,
   mouse_position: Point2<f32>,
   mouse_last_used_position: Point2<f32>,
@@ -221,119 +201,30 @@ impl ControlManager {
       position,
       velocity: vec3( 0.0, 0.0, 0.0 ),
       rotation: vec2( pitch, yaw ),
-      target_position: point3( 0.0, 0.0, 0.0 ),
       mouse_position: point2( 0.0, 0.0 ),
       mouse_last_used_position: point2( 0.0, 0.0 ),
       lmb_pressed: false
     }
   }
 
-  // fn get_mouse_position_delta( &self ) -> cgmath::Vector2<f64> {
-  //   cgmath::Vector2 {
-  //     x: self.mouse_position.x - self.mouse_last_used_position.x,
-  //     y: self.mouse_position.y - self.mouse_last_used_position.y,
-  //   }
-  // }
-
-  fn update_position_by_velocity( &mut self ) {
-    self.position.x += self.velocity.x;
-    self.position.y += self.velocity.y;
-    self.position.z += self.velocity.z;
-
-    self.target_position.x += self.velocity.x;
-    self.target_position.y += self.velocity.y;
-    self.target_position.z += self.velocity.z;
-  }
-
-  // fn update_target_position_by_mouse( &mut self ) {
-  //   if !self.lmb_pressed {
-  //     return
-  //   }
-
-  //   let pos_delta = self.get_mouse_position_delta();
-  //   let sensitivity = 0.1;
-
-  //   let horizontal_angle = Deg( -pos_delta.x as f32 * sensitivity );
-  //   let vertical_angle = Deg( pos_delta.y as f32 * sensitivity );
-
-  //   let up = Vec3::unit_y();
-  //   let direction = (self.target_position - self.position).normalize();
-  //   let right = up.cross( direction ).normalize();
-
-  //   let rotation_horizontal = Mat4::from_axis_angle( up, horizontal_angle );
-  //   let rotation_vertical = Mat4::from_axis_angle( right, vertical_angle );
-  //   let rotation = rotation_horizontal * rotation_vertical;
-
-  //   let new_direction = rotation.transform_vector( direction );
-
-  //   self.target_position = self.position + new_direction;
-  // }
-
   fn update_rotation( &mut self ) {
     if self.lmb_pressed {
       self.rotation.x += (self.mouse_position.y - self.mouse_last_used_position.y) * -0.001;
       self.rotation.y += (self.mouse_position.x - self.mouse_last_used_position.x) *  0.001;
-      // self.mouse_last_used_position = self.mouse_position;
     }
   }
 
   fn update( &mut self, delta_time:f32 ) {
     self.update_rotation();
 
-    // // let front = vec3(
-    // //   self.rotation.y.cos() * self.rotation.x.cos(),
-    // //   self.rotation.x.sin(),
-    // //   self.rotation.y.sin() * self.rotation.x.cos(),
-    // // )
-    // // .normalize();
-
-    // let front = Vector3::new(
-    //   self.rotation.y.cos(),
-    //   0.0,
-    //   self.rotation.y.sin(),
-    // )
-    // .normalize();
-
-    // let right = Vector3::new(
-    //   front.z,
-    //   0.0,
-    //   -front.x,
-    // );
-
-    // // let right = front.cross( Vec3::unit_y() ).normalize();
-    // // let up = right.cross( front ).normalize();
-
-    // let speed = 1.0;
-
-    // // self.position += front * self.velocity.z * speed * delta_time;
-    // // self.position += right * self.velocity.x * speed * delta_time;
-    // // self.position += up * self.velocity.y * speed * delta_time;
-
-    // self.position += front * self.velocity.z * speed * delta_time;
-    // self.position += right * self.velocity.x * speed * delta_time;
-    // self.position.y += self.velocity.y * speed * delta_time;
-
     let speed = 1.0;
-        // Update position based on velocity and rotation, but only affect horizontal movement
-        let front = Vector3::new(
-          self.rotation.y.cos(),
-          0.0, // Ignore vertical component
-          self.rotation.y.sin(),
-      )
-      .normalize();
+    let front = Vector3::new( self.rotation.y.cos(), 0.0, self.rotation.y.sin() ).normalize();
+    let right = Vector3::new( front.z, 0.0, -front.x );
 
-      let right = Vector3::new(
-          front.z,
-          0.0, // Ignore vertical component
-          -front.x,
-      );
+    self.position += front * self.velocity.z * speed * delta_time;
+    self.position += right * -self.velocity.x * speed * delta_time;
 
-      // Update the position considering the movement direction on the horizontal plane
-      self.position += front * self.velocity.z * speed * delta_time;
-      self.position += right * -self.velocity.x * speed * delta_time;
-
-      // Update the position always in the global Y-axis
-      self.position.y += self.velocity.y * speed * delta_time;
+    self.position.y += self.velocity.y * speed * delta_time;
   }
 
   fn get_view_matrix( &self ) -> Mat4 {
