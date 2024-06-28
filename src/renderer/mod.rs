@@ -35,7 +35,7 @@ use std::os::raw::c_void;
 use std::ffi::CStr;
 use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
-use std::time::Instant;
+use std::time::{ Instant, Duration };
 
 type Vec2 = cgmath::Vector2<f32>;
 type Vec3 = cgmath::Vector3<f32>;
@@ -96,7 +96,7 @@ pub fn render() -> Result<()> {
   let event_loop = EventLoop::new()?;
   let window = WindowBuilder::new()
     .with_title( "Vulkan Tutorial (Rust)" )
-    .with_inner_size( LogicalSize::new( 1024, 768 ) )
+    .with_inner_size( LogicalSize::new( 1536, 1152 ) )
     .build( &event_loop )?;
 
   window.set_cursor_visible( false );
@@ -144,12 +144,12 @@ pub fn render() -> Result<()> {
           let speed = 2.0;
 
           match event.physical_key {
-            PhysicalKey::Code( KeyCode::ArrowLeft  ) | PhysicalKey::Code( KeyCode::KeyA ) => app.control_manager.velocity.x = if pressed { -speed } else { 0.0 },
-            PhysicalKey::Code( KeyCode::ArrowRight ) | PhysicalKey::Code( KeyCode::KeyD ) => app.control_manager.velocity.x = if pressed {  speed } else { 0.0 },
-            PhysicalKey::Code( KeyCode::ShiftLeft  ) => app.control_manager.velocity.y = if pressed { -speed } else { 0.0 },
-            PhysicalKey::Code( KeyCode::Space      ) => app.control_manager.velocity.y = if pressed {  speed } else { 0.0 },
-            PhysicalKey::Code( KeyCode::ArrowUp    ) | PhysicalKey::Code( KeyCode::KeyW )  => app.control_manager.velocity.z = if pressed {  speed } else { 0.0 },
-            PhysicalKey::Code( KeyCode::ArrowDown  ) | PhysicalKey::Code( KeyCode::KeyS )  => app.control_manager.velocity.z = if pressed { -speed } else { 0.0 },
+            PhysicalKey::Code( KeyCode::ArrowLeft  ) | PhysicalKey::Code( KeyCode::KeyA ) => app.control_manager.velocity_left  = if pressed { speed } else { 0.0 },
+            PhysicalKey::Code( KeyCode::ArrowRight ) | PhysicalKey::Code( KeyCode::KeyD ) => app.control_manager.velocity_right = if pressed { speed } else { 0.0 },
+            PhysicalKey::Code( KeyCode::ShiftLeft  ) => app.control_manager.velocity_down = if pressed { speed } else { 0.0 },
+            PhysicalKey::Code( KeyCode::Space      ) => app.control_manager.velocity_up   = if pressed { speed } else { 0.0 },
+            PhysicalKey::Code( KeyCode::ArrowUp    ) | PhysicalKey::Code( KeyCode::KeyW ) => app.control_manager.velocity_forward  = if pressed { speed } else { 0.0 },
+            PhysicalKey::Code( KeyCode::ArrowDown  ) | PhysicalKey::Code( KeyCode::KeyS ) => app.control_manager.velocity_backward = if pressed { speed } else { 0.0 },
             PhysicalKey::Code( KeyCode::Digit1 ) => app.models = 1,
             PhysicalKey::Code( KeyCode::Digit2 ) => app.models = 2,
             PhysicalKey::Code( KeyCode::Digit3 ) => app.models = 3,
@@ -184,7 +184,12 @@ pub fn render() -> Result<()> {
 #[derive(Clone, Debug)]
 struct ControlManager {
   position: Point3<f32>,
-  velocity: Vector3<f32>,
+  velocity_left: f32,
+  velocity_right: f32,
+  velocity_up: f32,
+  velocity_down: f32,
+  velocity_forward: f32,
+  velocity_backward: f32,
   rotation: cgmath::Vector2<f32>,
   mouse_position: Point2<f32>,
   mouse_last_used_position: Point2<f32>,
@@ -199,7 +204,12 @@ impl ControlManager {
 
     Self {
       position,
-      velocity: vec3( 0.0, 0.0, 0.0 ),
+      velocity_right: 0.0,
+      velocity_left: 0.0,
+      velocity_up: 0.0,
+      velocity_down: 0.0,
+      velocity_forward: 0.0,
+      velocity_backward: 0.0,
       rotation: vec2( pitch, yaw ),
       mouse_position: point2( 0.0, 0.0 ),
       mouse_last_used_position: point2( 0.0, 0.0 ),
@@ -207,24 +217,24 @@ impl ControlManager {
     }
   }
 
-  fn update_rotation( &mut self ) {
+  fn update_rotation( &mut self, settings:&AppSettings, delta_time:f32 ) {
     if self.lmb_pressed {
-      self.rotation.x += (self.mouse_position.y - self.mouse_last_used_position.y) * -0.001;
-      self.rotation.y += (self.mouse_position.x - self.mouse_last_used_position.x) *  0.001;
+      self.rotation.x += (self.mouse_position.y - self.mouse_last_used_position.y) * -settings.rotation_sensitivity * delta_time;
+      self.rotation.y += (self.mouse_position.x - self.mouse_last_used_position.x) *  settings.rotation_sensitivity * delta_time;
     }
   }
 
-  fn update( &mut self, delta_time:f32 ) {
-    self.update_rotation();
+  fn update( &mut self, settings:&AppSettings, delta_time:f32 ) {
+    self.update_rotation( settings, delta_time );
 
-    let speed = 1.0;
+    let speed = settings.movement_speed;
     let front = Vector3::new( self.rotation.y.cos(), 0.0, self.rotation.y.sin() ).normalize();
     let right = Vector3::new( front.z, 0.0, -front.x );
 
-    self.position += front * self.velocity.z * speed * delta_time;
-    self.position += right * -self.velocity.x * speed * delta_time;
+    self.position += front * (self.velocity_forward - self.velocity_backward) * speed * delta_time;
+    self.position += right * -(self.velocity_right - self.velocity_left) * speed * delta_time;
 
-    self.position.y += self.velocity.y * speed * delta_time;
+    self.position.y += (self.velocity_up - self.velocity_down) * speed * delta_time;
   }
 
   fn get_view_matrix( &self ) -> Mat4 {
@@ -242,6 +252,22 @@ impl ControlManager {
 
 
 #[derive(Clone, Debug)]
+struct AppSettings {
+  rotation_sensitivity: f32,
+  movement_speed: f32,
+}
+
+impl AppSettings {
+  fn new() -> Self {
+    AppSettings {
+      rotation_sensitivity: 0.02,
+      movement_speed: 3.0,
+    }
+  }
+}
+
+
+#[derive(Clone, Debug)]
 struct App {
   models: usize,
   entry: Entry,
@@ -251,8 +277,11 @@ struct App {
   device: Device,
   frame: usize,
   resized: bool,
-  start: Instant,
+  last_tick_time: Instant,
   focused: bool,
+  settings: AppSettings,
+  fps_time: Instant,
+  fps_count: u32,
 }
 
 impl App {
@@ -299,8 +328,11 @@ impl App {
       frame: 0,
       resized: false,
       focused: true,
-      start: Instant::now(),
-      control_manager: ControlManager::new( point3( 0.0, 0.0, 6.0 ), point3( 0.0, 0.0, 0.0 ) )
+      last_tick_time: Instant::now(),
+      fps_time: Instant::now(),
+      fps_count: 0,
+      control_manager: ControlManager::new( point3( 0.0, 0.0, 6.0 ), point3( 0.0, 0.0, 0.0 ) ),
+      settings: AppSettings::new(),
     } )
   }
 
@@ -462,10 +494,24 @@ impl App {
 
     // let view = Mat4::look_at_rh( self.control_manager.position, self.control_manager.target_position, Vec3::unit_y() );
 
-    let delta_time = 1.0 / 60.0;
-    self.control_manager.update( delta_time );
-    let view = self.control_manager.get_view_matrix();
+    let frame_duration = Duration::from_secs_f64( (1 / 60) as f64 );
+    let timestamp = Instant::now();
 
+    let time_delta = timestamp.duration_since( self.last_tick_time );
+    self.last_tick_time = timestamp;
+
+    self.fps_count += 1;
+    if self.fps_time.elapsed() >= Duration::from_secs( 1 ) {
+      let fps = 1.0 / time_delta.as_secs_f64();
+      println!( "fps={}", self.fps_count );
+
+      self.fps_time = timestamp;
+      self.fps_count = 0
+    }
+
+    self.control_manager.update( &self.settings, time_delta.as_secs_f32() );
+
+    let view = self.control_manager.get_view_matrix();
     let correction = Mat4::new(
       1.0,  0.0,       0.0, 0.0,
       0.0, -1.0,       0.0, 0.0,
@@ -569,7 +615,7 @@ impl App {
 
     let x = (((model_index % 2) as f32) *  2.5) - 1.25;
     let y = (((model_index / 2) as f32) * -2.5) + 1.0;
-    let time = self.start.elapsed().as_secs_f32();
+    let time = self.last_tick_time.elapsed().as_secs_f32();
 
     let model = Mat4::from_translation( vec3( x, y, 0.0 ) );
     // * Mat4::from_axis_angle(
