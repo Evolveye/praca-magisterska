@@ -1,10 +1,10 @@
 // mod world;
-mod renderer;
+mod rendering;
 
 use std::io;
 
 fn main() {
-    let _ = renderer::render();
+    let _ = rendering::render();
 
     // let fragment = world::visible_fragment::VisibleFragment::new();
 

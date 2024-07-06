@@ -5,10 +5,8 @@
   clippy::unnecessary_wraps
 )]
 
-
-
 use anyhow::{anyhow, Result};
-use cgmath::{ point2, Point2, point3, Point3, vec2, vec3, Vector3, Deg, InnerSpace };
+use cgmath::{ point2, point3, vec2, vec3, Deg, InnerSpace, Point2, Point3, SquareMatrix, Vector3 };
 use log::*;
 use thiserror::Error;
 
@@ -21,14 +19,9 @@ use vulkanalia::bytecode::Bytecode;
 use vulkanalia::vk::KhrSurfaceExtension;
 use vulkanalia::vk::KhrSwapchainExtension;
 
-use winit::dpi::{ PhysicalPosition, LogicalSize };
-use winit::event::{ ElementState, Event, WindowEvent };
-use winit::keyboard::{ PhysicalKey, KeyCode };
-use winit::event_loop::EventLoop;
-use winit::window::{ Window, WindowBuilder };
+use winit::window::Window;
 
 use std::collections::{ HashMap, HashSet };
-use std::hash::{ Hash, Hasher };
 use std::io::BufReader;
 use std::fs::File;
 use std::os::raw::c_void;
@@ -37,11 +30,12 @@ use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
 use std::time::{ Instant, Duration };
 
-type Vec2 = cgmath::Vector2<f32>;
+use super::model::Model;
+// use super::model::Vertex;
+use super::vertex::Vertex;
+
 type Vec3 = cgmath::Vector3<f32>;
 type Mat4 = cgmath::Matrix4<f32>;
-
-
 
 const PORTABILITY_MACOS_VERSION:Version = Version::new( 1, 3, 216 );
 const VALIDATION_ENABLED:bool = cfg!( debug_assertions );
@@ -85,115 +79,19 @@ const INDICES:&[ u32 ] = &[
   // 5, 6, 2,
 ];
 
-
-
-pub fn render() -> Result<()> {
-  println!( "Renderer turned on" );
-  pretty_env_logger::init();
-
-  // Window
-
-  let event_loop = EventLoop::new()?;
-  let window = WindowBuilder::new()
-    .with_title( "Vulkan Tutorial (Rust)" )
-    .with_inner_size( LogicalSize::new( 1536, 1152 ) )
-    .build( &event_loop )?;
-
-  window.set_cursor_visible( false );
-
-  let window_size = window.inner_size();
-  let center = PhysicalPosition::new(window_size.width as f64 / 2.0, window_size.height as f64 / 2.0);
-
-  let mut app = unsafe { App::create( &window )? };
-  let mut minimized = false;
-
-  event_loop.run( move |event, elwt| {
-    match event {
-      Event::AboutToWait => window.request_redraw(),
-
-      Event::WindowEvent { event, .. } => match event {
-        WindowEvent::RedrawRequested if !elwt.exiting() && !minimized => {
-          if app.focused {
-            window.set_cursor_position( center ).unwrap();
-            app.control_manager.mouse_last_used_position = app.control_manager.mouse_position;
-          }
-
-          unsafe { app.render( &window ) }.unwrap();
-        },
-
-        WindowEvent::Resized( size ) => {
-          if size.width == 0 || size.height == 0 {
-            minimized = true;
-          } else {
-            minimized = false;
-            app.resized = true;
-          }
-        }
-
-        WindowEvent::Focused( focused ) => {
-          app.focused = focused;
-        }
-
-        WindowEvent::CloseRequested => {
-          elwt.exit();
-          unsafe { app.destroy(); }
-        }
-
-        WindowEvent::KeyboardInput { event, .. } => {
-          let pressed = event.state == ElementState::Pressed;
-          let speed = 2.0;
-
-          match event.physical_key {
-            PhysicalKey::Code( KeyCode::ArrowLeft  ) | PhysicalKey::Code( KeyCode::KeyA ) => app.control_manager.velocity_left  = if pressed { speed } else { 0.0 },
-            PhysicalKey::Code( KeyCode::ArrowRight ) | PhysicalKey::Code( KeyCode::KeyD ) => app.control_manager.velocity_right = if pressed { speed } else { 0.0 },
-            PhysicalKey::Code( KeyCode::ShiftLeft  ) => app.control_manager.velocity_down = if pressed { speed } else { 0.0 },
-            PhysicalKey::Code( KeyCode::Space      ) => app.control_manager.velocity_up   = if pressed { speed } else { 0.0 },
-            PhysicalKey::Code( KeyCode::ArrowUp    ) | PhysicalKey::Code( KeyCode::KeyW ) => app.control_manager.velocity_forward  = if pressed { speed } else { 0.0 },
-            PhysicalKey::Code( KeyCode::ArrowDown  ) | PhysicalKey::Code( KeyCode::KeyS ) => app.control_manager.velocity_backward = if pressed { speed } else { 0.0 },
-            PhysicalKey::Code( KeyCode::Digit1 ) => app.models = 1,
-            PhysicalKey::Code( KeyCode::Digit2 ) => app.models = 2,
-            PhysicalKey::Code( KeyCode::Digit3 ) => app.models = 3,
-            PhysicalKey::Code( KeyCode::Digit4 ) => app.models = 4,
-            PhysicalKey::Code( KeyCode::Escape ) => {
-              elwt.exit();
-              unsafe { app.destroy(); }
-            }
-            _ => { }
-          }
-        }
-
-        _ => {}
-      }
-
-      Event::DeviceEvent {
-        event: winit::event::DeviceEvent::MouseMotion { delta },
-        ..
-    } => {
-        let (dx, dy) = delta;
-        app.control_manager.rotation.y += dx as f32 * 0.001;
-        app.control_manager.rotation.x -= dy as f32 * 0.001;
-        app.control_manager.rotation.x = app.control_manager.rotation.x.clamp(-std::f32::consts::FRAC_PI_2, std::f32::consts::FRAC_PI_2);
-    }
-      _ => {}
-    }
-  } )?;
-
-  Ok(())
-}
-
 #[derive(Clone, Debug)]
-struct ControlManager {
-  position: Point3<f32>,
-  velocity_left: f32,
-  velocity_right: f32,
-  velocity_up: f32,
-  velocity_down: f32,
-  velocity_forward: f32,
-  velocity_backward: f32,
-  rotation: cgmath::Vector2<f32>,
-  mouse_position: Point2<f32>,
-  mouse_last_used_position: Point2<f32>,
-  lmb_pressed: bool,
+pub struct ControlManager {
+  pub position: Point3<f32>,
+  pub velocity_left: f32,
+  pub velocity_right: f32,
+  pub velocity_up: f32,
+  pub velocity_down: f32,
+  pub velocity_forward: f32,
+  pub velocity_backward: f32,
+  pub rotation: cgmath::Vector2<f32>,
+  pub mouse_position: Point2<f32>,
+  pub mouse_last_used_position: Point2<f32>,
+  pub lmb_pressed: bool,
 }
 
 impl ControlManager {
@@ -252,15 +150,15 @@ impl ControlManager {
 
 
 #[derive(Clone, Debug)]
-struct AppSettings {
-  rotation_sensitivity: f32,
-  movement_speed: f32,
+pub struct AppSettings {
+  pub rotation_sensitivity: f32,
+  pub movement_speed: f32,
 }
 
 impl AppSettings {
   fn new() -> Self {
-    AppSettings {
-      rotation_sensitivity: 0.02,
+    Self {
+      rotation_sensitivity: 0.004,
       movement_speed: 3.0,
     }
   }
@@ -268,25 +166,25 @@ impl AppSettings {
 
 
 #[derive(Clone, Debug)]
-struct App {
-  models: usize,
-  entry: Entry,
-  control_manager: ControlManager,
-  instance: Instance,
-  data: AppData,
-  device: Device,
-  frame: usize,
-  resized: bool,
-  last_tick_time: Instant,
-  focused: bool,
-  settings: AppSettings,
-  fps_time: Instant,
-  fps_count: u32,
+pub struct App {
+  pub models: usize,
+  pub entry: Entry,
+  pub instance: Instance,
+  pub data: AppData,
+  pub device: Device,
+  pub frame: usize,
+  pub resized: bool,
+  pub last_tick_time: Instant,
+  pub focused: bool,
+  pub settings: AppSettings,
+  pub fps_time: Instant,
+  pub fps_count: u32,
+  pub geometry_generator: fn(i32) -> i32,
+  pub control_manager: ControlManager,
 }
 
 impl App {
-  /// Creates our Vulkan app.
-  unsafe fn create( window:&Window ) -> Result<Self> {
+  pub unsafe fn create( window:&Window, geometry_generator:fn(i32) -> i32 ) -> Result<Self> {
     let loader = LibloadingLoader::new( LIBRARY )?;
     let entry = Entry::new( loader ).map_err( |b| anyhow!( "{}", b ) )?;
     let mut data = AppData::default();
@@ -323,7 +221,7 @@ impl App {
     create_sync_objects( &device, &mut data )?;
 
     Ok( Self {
-      entry, instance, data, device,
+      entry, instance, data, device, geometry_generator,
       models: 4,
       frame: 0,
       resized: false,
@@ -336,7 +234,7 @@ impl App {
     } )
   }
 
-  unsafe fn destroy( &mut self ) {
+  pub unsafe fn destroy( &mut self ) {
     self.device.device_wait_idle().unwrap();
 
     self.destroy_swapchain();
@@ -418,7 +316,7 @@ impl App {
 
 
 
-  unsafe fn render( &mut self, window:&Window) -> Result<()> {
+  pub unsafe fn render( &mut self, window:&Window) -> Result<()> {
     self.device.wait_for_fences( &[ self.data.in_flight_fences[ self.frame ] ], true, u64::MAX )?;
 
     let result = self.device.acquire_next_image_khr(
@@ -528,7 +426,7 @@ impl App {
 
     // self.control_manager.update_last_mouse_position();
 
-    let ubo = UniformBufferObject { view, proj };
+    let ubo = UniformBufferObject { view, proj, model:Mat4::from_value( 1.0 ) };
 
     let memory = self.device.map_memory(
       self.data.uniform_buffers_memory[ image_index ],
@@ -538,6 +436,46 @@ impl App {
     )?;
 
     memcpy( &ubo, memory.cast(), 1 );
+
+
+
+    // //# instances
+    // let ubos = (0..=0).map( |model_index| {
+    //   let x = (((model_index % 2) as f32) *  2.5) - 1.25;
+    //   let y = (((model_index / 2) as f32) * -2.5) + 1.0;
+    //   let time = self.last_tick_time.elapsed().as_secs_f32();
+
+    //   let model = Mat4::from_translation( vec3( x, y, 0.0 ) );
+    //   // * Mat4::from_axis_angle(
+    //   //   vec3( 0.0, 0.0, 1.0 ),
+    //   //   Deg( 90.0 ) * time
+    //   // );
+
+    //   let model_bytes = std::slice::from_raw_parts(
+    //     &model as *const Mat4 as *const u8,
+    //     size_of::<Mat4>()
+    //   );
+
+    //   let opacity = 1.0f32; //(model_index + 1) as f32 * 0.25;
+    //   // let opacity = (4 - model_index) as f32 * 0.25;
+    //   let opacity_bytes = &opacity.to_ne_bytes()[..];
+
+    //   UniformBufferObject { view, proj, model }
+    // } )
+    // .collect::<Vec<UniformBufferObject>>();
+
+    // let memory = self.device.map_memory(
+    //   self.data.uniform_buffers_memory[ image_index ],
+    //   0,
+    //   (size_of::<UniformBufferObject>() * ubos.len()) as u64,
+    //   vk::MemoryMapFlags::empty()
+    // )?;
+
+    // memcpy( ubos.as_ptr(), memory.cast(), ubos.len() );
+    // //#
+
+
+
 
     self.device.unmap_memory( self.data.uniform_buffers_memory[ image_index ] );
 
@@ -549,8 +487,6 @@ impl App {
     self.device.reset_command_pool( command_pool, vk::CommandPoolResetFlags::empty() )?;
 
     let command_buffer = self.data.command_buffers[ image_index ];
-
-    let inheritance = vk::CommandBufferInheritanceInfo::builder();
 
     let begin_info = vk::CommandBufferBeginInfo::builder()
       .flags( vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT );
@@ -584,6 +520,7 @@ impl App {
     self.device.cmd_begin_render_pass( command_buffer, &render_pass_begin, vk::SubpassContents::SECONDARY_COMMAND_BUFFERS );
 
     let secondary_command_buffers = (0..self.models)
+    // let secondary_command_buffers = (0..3)
       .map( |i| self.update_secondary_command_buffer( image_index, i ) )
       .collect::<Result<Vec<_>, _>>()?;
 
@@ -628,7 +565,7 @@ impl App {
       size_of::<Mat4>()
     );
 
-    let opacity = (model_index + 1) as f32 * 0.25;
+    let opacity = 1.0f32; //(model_index + 1) as f32 * 0.25;
     // let opacity = (4 - model_index) as f32 * 0.25;
     let opacity_bytes = &opacity.to_ne_bytes()[..];
 
@@ -684,55 +621,53 @@ impl App {
 
 
 #[derive(Clone, Debug, Default)]
-struct AppData {
-  surface: vk::SurfaceKHR,
-  messenger: vk::DebugUtilsMessengerEXT,
-  physical_device: vk::PhysicalDevice,
-  msaa_samples: vk::SampleCountFlags,
-  graphics_queue: vk::Queue,
-  present_queue: vk::Queue,
-  swapchain: vk::SwapchainKHR,
-  swapchain_format: vk::Format,
-  swapchain_extent: vk::Extent2D,
-  swapchain_images: Vec<vk::Image>,
-  swapchain_image_views: Vec<vk::ImageView>,
-  render_pass: vk::RenderPass,
-  descriptor_set_layout: vk::DescriptorSetLayout,
-  pipeline_layout: vk::PipelineLayout,
-  pipeline: vk::Pipeline,
-  framebuffers: Vec<vk::Framebuffer>,
-  command_pool: vk::CommandPool,
-  command_pools: Vec<vk::CommandPool>,
-  command_buffers: Vec<vk::CommandBuffer>,
-  secondary_command_buffers: Vec<Vec<vk::CommandBuffer>>,
-  image_available_semaphores: Vec<vk::Semaphore>,
-  render_finished_semaphores: Vec<vk::Semaphore>,
-  in_flight_fences: Vec<vk::Fence>,
-  images_in_flight: Vec<vk::Fence>,
-  vertices: Vec<Vertex>,
-  indices: Vec<u32>,
-  vertex_buffer: vk::Buffer,
-  vertex_buffer_memory: vk::DeviceMemory,
-  index_buffer: vk::Buffer,
-  index_buffer_memory: vk::DeviceMemory,
-  uniform_buffers: Vec<vk::Buffer>,
-  uniform_buffers_memory: Vec<vk::DeviceMemory>,
-  descriptor_pool: vk::DescriptorPool,
-  descriptor_sets: Vec<vk::DescriptorSet>,
-  mip_levels: u32,
-  color_image: vk::Image,
-  color_image_memory: vk::DeviceMemory,
-  color_image_view: vk::ImageView,
-  texture_image: vk::Image,
-  texture_image_memory: vk::DeviceMemory,
-  texture_image_view: vk::ImageView,
-  texture_sampler: vk::Sampler,
-  depth_image: vk::Image,
-  depth_image_memory: vk::DeviceMemory,
-  depth_image_view: vk::ImageView,
+pub struct AppData {
+  pub surface: vk::SurfaceKHR,
+  pub messenger: vk::DebugUtilsMessengerEXT,
+  pub physical_device: vk::PhysicalDevice,
+  pub msaa_samples: vk::SampleCountFlags,
+  pub graphics_queue: vk::Queue,
+  pub present_queue: vk::Queue,
+  pub swapchain: vk::SwapchainKHR,
+  pub swapchain_format: vk::Format,
+  pub swapchain_extent: vk::Extent2D,
+  pub swapchain_images: Vec<vk::Image>,
+  pub swapchain_image_views: Vec<vk::ImageView>,
+  pub render_pass: vk::RenderPass,
+  pub descriptor_set_layout: vk::DescriptorSetLayout,
+  pub pipeline_layout: vk::PipelineLayout,
+  pub pipeline: vk::Pipeline,
+  pub framebuffers: Vec<vk::Framebuffer>,
+  pub command_pool: vk::CommandPool,
+  pub command_pools: Vec<vk::CommandPool>,
+  pub command_buffers: Vec<vk::CommandBuffer>,
+  pub secondary_command_buffers: Vec<Vec<vk::CommandBuffer>>,
+  pub image_available_semaphores: Vec<vk::Semaphore>,
+  pub render_finished_semaphores: Vec<vk::Semaphore>,
+  pub in_flight_fences: Vec<vk::Fence>,
+  pub images_in_flight: Vec<vk::Fence>,
+  pub vertices: Vec<Vertex>,
+  pub indices: Vec<u32>,
+  pub vertex_buffer: vk::Buffer,
+  pub vertex_buffer_memory: vk::DeviceMemory,
+  pub index_buffer: vk::Buffer,
+  pub index_buffer_memory: vk::DeviceMemory,
+  pub uniform_buffers: Vec<vk::Buffer>,
+  pub uniform_buffers_memory: Vec<vk::DeviceMemory>,
+  pub descriptor_pool: vk::DescriptorPool,
+  pub descriptor_sets: Vec<vk::DescriptorSet>,
+  pub mip_levels: u32,
+  pub color_image: vk::Image,
+  pub color_image_memory: vk::DeviceMemory,
+  pub color_image_view: vk::ImageView,
+  pub texture_image: vk::Image,
+  pub texture_image_memory: vk::DeviceMemory,
+  pub texture_image_view: vk::ImageView,
+  pub texture_sampler: vk::Sampler,
+  pub depth_image: vk::Image,
+  pub depth_image_memory: vk::DeviceMemory,
+  pub depth_image_view: vk::ImageView,
 }
-
-
 
 #[derive(Debug, Error)]
 #[error("Missing {0}.")]
@@ -791,73 +726,6 @@ impl SwapchainSupport {
 
 
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug)]
-struct Vertex {
-  pos: Vec3,
-  color: Vec3,
-  tex_coord: Vec2,
-}
-
-impl Vertex {
-  const fn new( pos:Vec3, color:Vec3, tex_coord:Vec2 ) -> Self {
-    Self { pos, color, tex_coord }
-  }
-
-  fn binding_description() -> vk::VertexInputBindingDescription {
-    vk::VertexInputBindingDescription::builder()
-      .binding( 0 )
-      .stride( size_of::<Vertex>() as u32 )
-      .input_rate( vk::VertexInputRate::VERTEX )
-      .build()
-  }
-
-  fn attribute_description() -> [ vk::VertexInputAttributeDescription; 3 ] {
-    let pos = vk::VertexInputAttributeDescription::builder()
-      .binding( 0 )
-      .location( 0 )
-      .format( vk::Format::R32G32B32_SFLOAT )
-      .offset( 0 )
-      .build();
-
-    let color = vk::VertexInputAttributeDescription::builder()
-      .binding( 0 )
-      .location( 1 )
-      .format( vk::Format::R32G32B32_SFLOAT )
-      .offset( size_of::<Vec3>() as u32 )
-      .build();
-
-    let tex_coord = vk::VertexInputAttributeDescription::builder()
-      .binding( 0 )
-      .location( 2 )
-      .format( vk::Format::R32G32_SFLOAT )
-      .offset( (size_of::<Vec3>() + size_of::<Vec3>()) as u32 )
-      .build();
-
-    [ pos, color, tex_coord ]
-  }
-}
-
-impl PartialEq for Vertex {
-  fn eq( &self, other:&Self ) -> bool {
-    self.pos == other.pos && self.color == other.color && self.tex_coord == other.tex_coord
-  }
-}
-
-impl Eq for Vertex {}
-
-impl Hash for Vertex {
-  fn hash<H:Hasher>( &self, state:&mut H ) {
-    self.pos[ 0 ].to_bits().hash( state );
-    self.pos[ 1 ].to_bits().hash( state );
-    self.pos[ 2 ].to_bits().hash( state );
-    self.color[ 0 ].to_bits().hash( state );
-    self.color[ 1 ].to_bits().hash( state );
-    self.color[ 2 ].to_bits().hash( state );
-    self.tex_coord[ 0 ].to_bits().hash( state );
-    self.tex_coord[ 1 ].to_bits().hash( state );
-  }
-}
 
 
 
@@ -866,72 +734,17 @@ impl Hash for Vertex {
 struct UniformBufferObject {
   view: Mat4,
   proj: Mat4,
+  model: Mat4,
 }
 
 
-fn load_model( data:&mut AppData, src:&str ) -> Result<()> {
-  if src == "cube" {
-    data.vertices = VERTICES.into();
-    data.indices = INDICES.into();
-    return Ok(())
-  }
 
-  let mut unique_vertices = HashMap::new();
-  let mut reader = BufReader::new( File::open( src )? );
 
-  let ( models, _ ) = tobj::load_obj_buf(
-    &mut reader,
-    &tobj::LoadOptions { triangulate:true, single_index:true, ..Default::default() },
-    |_| std::result::Result::Ok( Default::default() ),
-  )?;
+pub fn load_model( data:&mut AppData, src:&str ) -> Result<()> {
+  let model = if src == "cube" { Model::new_cube() } else { Model::from_file( src )? };
 
-  let get_min_max = |a:(f32, f32), b:f32| (
-    if a.0 > b { b } else { a.0 },
-    if a.1 > b { a.1 } else { b },
-  );
-
-  for model in models {
-    let mut min_max_x = (0.0, 0.0);
-    let mut min_max_y = (0.0, 0.0);
-    let mut min_max_z = (0.0, 0.0);
-
-    for index in model.mesh.indices.clone() {
-      let pos_offset = (3 * index) as usize;
-
-      min_max_x = get_min_max( min_max_x, model.mesh.positions[ pos_offset + 0 ] );
-      min_max_y = get_min_max( min_max_x, model.mesh.positions[ pos_offset + 1 ] );
-      min_max_z = get_min_max( min_max_x, model.mesh.positions[ pos_offset + 2 ] );
-    }
-
-    for index in model.mesh.indices {
-      let pos_offset = (3 * index) as usize;
-      let tex_coord_offset = (2 * index) as usize;
-
-      let vertex = Vertex {
-        pos: vec3(
-          model.mesh.positions[ pos_offset + 0 ],
-          model.mesh.positions[ pos_offset + 1 ],
-          model.mesh.positions[ pos_offset + 2 ],
-        ),
-        color: vec3( 1.0, 1.0, 1.0 ),
-        tex_coord: if model.mesh.texcoords.is_empty() { vec2( 0.0, 0.0 ) } else {
-          vec2(
-            model.mesh.texcoords[ tex_coord_offset + 0 ],
-            1.0 - model.mesh.texcoords[ tex_coord_offset + 1 ],
-          )
-        },
-      };
-
-      if let Some( index ) = unique_vertices.get( &vertex ) {
-        data.indices.push( *index as u32 )
-      } else {
-        let index = data.vertices.len();
-        unique_vertices.insert( vertex, index );
-        data.vertices.push( vertex );
-        data.indices.push( index as u32 )
-      }
-    }
-  }
+  data.vertices = model.vertices;
+  data.indices = model.indices;
 
   Ok(())
 }

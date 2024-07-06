@@ -1,2 +1,2 @@
-glslc ./src/renderer/shaders/shader.vert -o ./src/renderer/shaders/vert.spv
-glslc ./src/renderer/shaders/shader.frag -o ./src/renderer/shaders/frag.spv
+glslc ./src/rendering/shaders/shader.vert -o ./src/rendering/shaders/vert.spv
+glslc ./src/rendering/shaders/shader.frag -o ./src/rendering/shaders/frag.spv
