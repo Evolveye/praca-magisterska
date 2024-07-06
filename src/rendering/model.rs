@@ -4,11 +4,17 @@ use std::{
   collections::HashMap,
   io::BufReader,
   fs::File,
+  mem::size_of,
 };
+use vulkanalia::{
+  vk,
+  prelude::v1_0::*
+};
+
 use super::vertex::Vertex;
 
-type Vec3 = cgmath::Vector3<f32>;
 type Mat4 = cgmath::Matrix4<f32>;
+type Vec3 = cgmath::Vector3<f32>;
 
 static VERTICES:[ Vertex; 8 ] = [
   // Vertex::new( vec3( -1.0, -1.0, -1.0 ), vec3( 1.0, 0.0, 0.0 ), vec2( 1.0, 0.0 ) ),
@@ -125,5 +131,33 @@ impl Model {
       vertices: VERTICES.into(),
       indices: INDICES.into(),
     }
+  }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct ModelInstance {
+  pub translate: Vec3
+}
+
+impl ModelInstance {
+  pub fn binding_description() -> vk::VertexInputBindingDescription {
+    vk::VertexInputBindingDescription::builder()
+      .binding( 1 )
+      .stride( size_of::<ModelInstance>() as u32 )
+      .input_rate( vk::VertexInputRate::INSTANCE )
+      .build()
+  }
+
+  pub fn attribute_description() -> [ vk::VertexInputAttributeDescription; 1 ] {
+    let instance_matrix = vk::VertexInputAttributeDescription::builder()
+      .binding( 1 )
+      .location( 3 )
+      .format( vk::Format::R32G32B32_SFLOAT )
+      // .format( vk::Format::R32G32B32A32_SFLOAT )
+      .offset( 0 )
+      .build();
+
+    [ instance_matrix ]
   }
 }

@@ -21,7 +21,7 @@ use vulkanalia::vk::KhrSwapchainExtension;
 
 use winit::window::Window;
 
-use std::collections::{ HashMap, HashSet };
+use std::collections::HashSet;
 use std::io::BufReader;
 use std::fs::File;
 use std::os::raw::c_void;
@@ -30,8 +30,7 @@ use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
 use std::time::{ Instant, Duration };
 
-use super::model::Model;
-// use super::model::Vertex;
+use super::model::{ Model, ModelInstance };
 use super::vertex::Vertex;
 
 type Vec3 = cgmath::Vector3<f32>;
@@ -190,6 +189,7 @@ impl App {
     let mut data = AppData::default();
     let instance = create_instance( window, &entry, &mut data )?;
 
+    data.instances_count = 5;
     data.surface = vk_window::create_surface( &instance, &window, &window )?;
     pick_physical_device( &instance, &mut data )?;
 
@@ -222,7 +222,7 @@ impl App {
 
     Ok( Self {
       entry, instance, data, device, geometry_generator,
-      models: 4,
+      models: 1,
       frame: 0,
       resized: false,
       focused: true,
@@ -424,9 +424,7 @@ impl App {
       100.0,
     );
 
-    // self.control_manager.update_last_mouse_position();
-
-    let ubo = UniformBufferObject { view, proj, model:Mat4::from_value( 1.0 ) };
+    let ubo = UniformBufferObject { view, proj };
 
     let memory = self.device.map_memory(
       self.data.uniform_buffers_memory[ image_index ],
@@ -436,46 +434,6 @@ impl App {
     )?;
 
     memcpy( &ubo, memory.cast(), 1 );
-
-
-
-    // //# instances
-    // let ubos = (0..=0).map( |model_index| {
-    //   let x = (((model_index % 2) as f32) *  2.5) - 1.25;
-    //   let y = (((model_index / 2) as f32) * -2.5) + 1.0;
-    //   let time = self.last_tick_time.elapsed().as_secs_f32();
-
-    //   let model = Mat4::from_translation( vec3( x, y, 0.0 ) );
-    //   // * Mat4::from_axis_angle(
-    //   //   vec3( 0.0, 0.0, 1.0 ),
-    //   //   Deg( 90.0 ) * time
-    //   // );
-
-    //   let model_bytes = std::slice::from_raw_parts(
-    //     &model as *const Mat4 as *const u8,
-    //     size_of::<Mat4>()
-    //   );
-
-    //   let opacity = 1.0f32; //(model_index + 1) as f32 * 0.25;
-    //   // let opacity = (4 - model_index) as f32 * 0.25;
-    //   let opacity_bytes = &opacity.to_ne_bytes()[..];
-
-    //   UniformBufferObject { view, proj, model }
-    // } )
-    // .collect::<Vec<UniformBufferObject>>();
-
-    // let memory = self.device.map_memory(
-    //   self.data.uniform_buffers_memory[ image_index ],
-    //   0,
-    //   (size_of::<UniformBufferObject>() * ubos.len()) as u64,
-    //   vk::MemoryMapFlags::empty()
-    // )?;
-
-    // memcpy( ubos.as_ptr(), memory.cast(), ubos.len() );
-    // //#
-
-
-
 
     self.device.unmap_memory( self.data.uniform_buffers_memory[ image_index ] );
 
@@ -550,6 +508,11 @@ impl App {
 
     // Model
 
+    // TODO it have to be written ~~better~~ in correct way
+    self.device.destroy_buffer( self.data.instance_buffer, None );
+    self.device.free_memory( self.data.instance_buffer_memory, None );
+    create_instance_buffer( &self.instance, &self.device, &mut self.data )?;
+
     let x = (((model_index % 2) as f32) *  2.5) - 1.25;
     let y = (((model_index / 2) as f32) * -2.5) + 1.0;
     let time = self.last_tick_time.elapsed().as_secs_f32();
@@ -565,7 +528,8 @@ impl App {
       size_of::<Mat4>()
     );
 
-    let opacity = 1.0f32; //(model_index + 1) as f32 * 0.25;
+    let opacity = 0.2 as f32;
+    // let opacity = 1.0f32; //(model_index + 1) as f32 * 0.25;
     // let opacity = (4 - model_index) as f32 * 0.25;
     let opacity_bytes = &opacity.to_ne_bytes()[..];
 
@@ -583,7 +547,7 @@ impl App {
     self.device.begin_command_buffer( command_buffer, &info )?;
 
     self.device.cmd_bind_pipeline( command_buffer, vk::PipelineBindPoint::GRAPHICS, self.data.pipeline );
-    self.device.cmd_bind_vertex_buffers( command_buffer, 0, &[ self.data.vertex_buffer ], &[ 0 ] );
+    self.device.cmd_bind_vertex_buffers( command_buffer, 0, &[ self.data.vertex_buffer, self.data.instance_buffer ], &[ 0, 0 ] );
     self.device.cmd_bind_index_buffer( command_buffer, self.data.index_buffer, 0, vk::IndexType::UINT32 );
 
     self.device.cmd_bind_descriptor_sets(
@@ -611,7 +575,7 @@ impl App {
       opacity_bytes,
     );
 
-    self.device.cmd_draw_indexed( command_buffer, self.data.indices.len() as u32, 1, 0, 0, 0 );
+    self.device.cmd_draw_indexed( command_buffer, self.data.indices.len() as u32, self.data.instances_count, 0, 0, 0 );
     self.device.end_command_buffer( command_buffer )?;
 
     Ok( command_buffer )
@@ -650,6 +614,9 @@ pub struct AppData {
   pub indices: Vec<u32>,
   pub vertex_buffer: vk::Buffer,
   pub vertex_buffer_memory: vk::DeviceMemory,
+  pub instances_count: u32,
+  pub instance_buffer: vk::Buffer,
+  pub instance_buffer_memory: vk::DeviceMemory,
   pub index_buffer: vk::Buffer,
   pub index_buffer_memory: vk::DeviceMemory,
   pub uniform_buffers: Vec<vk::Buffer>,
@@ -734,7 +701,6 @@ impl SwapchainSupport {
 struct UniformBufferObject {
   view: Mat4,
   proj: Mat4,
-  model: Mat4,
 }
 
 
@@ -1008,7 +974,6 @@ unsafe fn get_memory_type_index( instance:&Instance, data:&mut AppData, properti
     .ok_or_else( || anyhow!( "Failed to find suitable memory type." ) )
 }
 
-
 unsafe fn create_swapchain( window:&Window, instance:&Instance, device:&Device, data:&mut AppData ) -> Result<()> {
   let indices = QueueFamilyIndices::get( instance, data, data.physical_device )?;
   let support = SwapchainSupport::get( instance, data, data.physical_device )?;
@@ -1176,11 +1141,29 @@ unsafe fn create_pipeline( device:&Device, data:&mut AppData ) -> Result<()> {
     .module( frag_shader_module )
     .name( b"main\0" );
 
-  let binding_descriptions = &[ Vertex::binding_description() ];
-  let attribute_descriptions = Vertex::attribute_description();
+  let binding_descriptions = &[ Vertex::binding_description(), ModelInstance::binding_description() ];
+  let attribute_descriptions = {
+    let vertex_description = Vertex::attribute_description();
+    let instance_description = ModelInstance::attribute_description();
+
+    let mut descriptions: [ vk::VertexInputAttributeDescription; 4 ] = Default::default();
+    let (left, right) = descriptions.split_at_mut( vertex_description.len() );
+
+    left.copy_from_slice( &vertex_description );
+    right.copy_from_slice( &instance_description );
+
+    descriptions
+  };
+
   let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
     .vertex_binding_descriptions( binding_descriptions )
     .vertex_attribute_descriptions( &attribute_descriptions );
+
+  let instance_binding_descriptions = &[ ModelInstance::binding_description() ];
+  let instance_attribute_descriptions = ModelInstance::attribute_description();
+  let instance_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
+    .vertex_binding_descriptions( instance_binding_descriptions )
+    .vertex_attribute_descriptions( &instance_attribute_descriptions );
 
   let input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo::builder()
     .topology( vk::PrimitiveTopology::TRIANGLE_LIST )
@@ -1855,6 +1838,68 @@ unsafe fn create_vertex_buffer( instance:&Instance, device:&Device, data:&mut Ap
   Ok(())
 }
 
+unsafe fn create_instance_buffer( instance:&Instance, device:&Device, data:&mut AppData ) -> Result<()> {
+  let size = (size_of::<ModelInstance>() * data.instances_count as usize) as u64;
+  let ( staging_buffer, staging_buffer_memory ) = create_buffer(
+    instance,
+    device,
+    data,
+    size,
+    vk::BufferUsageFlags::TRANSFER_SRC,
+    vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
+  )?;
+
+  let memory = device.map_memory( staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
+
+  // TODO Instances data
+  let instances_data = (0..data.instances_count).map( |model_index| {
+    let x = ((model_index % 2) as f32) *  4.0;
+    let y = ((model_index / 2) as f32) * -8.0;
+    // let time = self.last_tick_time.elapsed().as_secs_f32();
+
+    let translate = Vector3::new( x, y, 0.0 );
+    // let transform = Mat4::from_translation( vec3( x, y, 0.0 ) );
+    // * Mat4::from_axis_angle(
+    //   vec3( 0.0, 0.0, 1.0 ),
+    //   Deg( 90.0 ) * time
+    // );
+
+    // let model_bytes = std::slice::from_raw_parts(
+    //   &model as *const Mat4 as *const u8,
+    //   size_of::<Mat4>()
+    // );
+
+    // let opacity = 1.0f32; //(model_index + 1) as f32 * 0.25;
+    // let opacity = (4 - model_index) as f32 * 0.25;
+    // let opacity_bytes = &opacity.to_ne_bytes()[..];
+
+    ModelInstance { translate }
+  } )
+  .collect::<Vec<ModelInstance>>();
+
+  memcpy( instances_data.as_ptr(), memory.cast(), data.instances_count as usize );
+  device.unmap_memory( staging_buffer_memory );
+
+  let ( instance_buffer, instance_buffer_memory ) = create_buffer(
+    instance,
+    device,
+    data,
+    size,
+    vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
+    vk::MemoryPropertyFlags::DEVICE_LOCAL,
+  )?;
+
+  data.instance_buffer = instance_buffer;
+  data.instance_buffer_memory = instance_buffer_memory;
+
+  copy_buffer( device, data, staging_buffer, instance_buffer, size )?;
+
+  device.destroy_buffer( staging_buffer, None );
+  device.free_memory( staging_buffer_memory, None );
+
+  Ok(())
+}
+
 unsafe fn create_index_buffer( instance:&Instance, device:&Device, data:&mut AppData ) -> Result<()> {
   let size = (size_of::<u32>() * data.indices.len()) as u64;
   let ( staging_buffer, staging_buffer_memory ) = create_buffer(
@@ -1900,7 +1945,7 @@ unsafe fn create_uniform_buffers( instance:&Instance, device:&Device, data:&mut 
       instance,
       device,
       data,
-      size_of::<UniformBufferObject>() as u64,
+      (size_of::<UniformBufferObject>()) as u64 * data.instances_count as u64,
       vk::BufferUsageFlags::UNIFORM_BUFFER,
       vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE
     )?;
