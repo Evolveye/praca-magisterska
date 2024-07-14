@@ -214,6 +214,7 @@ impl App {
     // load_model( &mut data, "src/resources/bunny.obj" )?;
     create_vertex_buffer( &instance, &device, &mut data )?;
     create_index_buffer( &instance, &device, &mut data )?;
+    // create_instance_buffer( &instance, &device, &mut data )?;
     create_uniform_buffers( &instance, &device, &mut data )?;
     create_descriptor_pool( &device, &mut data )?;
     create_descriptor_sets( &device, &mut data )?;
@@ -246,6 +247,9 @@ impl App {
     self.device.free_memory( self.data.texture_image_memory, None );
 
     self.device.destroy_descriptor_set_layout( self.data.descriptor_set_layout, None );
+
+    // self.device.destroy_buffer( self.data.instance_buffer, None );
+    // self.device.free_memory( self.data.instance_buffer_memory, None );
 
     self.device.destroy_buffer( self.data.vertex_buffer, None );
     self.device.free_memory( self.data.vertex_buffer_memory, None );
@@ -477,7 +481,8 @@ impl App {
 
     self.device.cmd_begin_render_pass( command_buffer, &render_pass_begin, vk::SubpassContents::SECONDARY_COMMAND_BUFFERS );
 
-    let secondary_command_buffers = (0..self.models)
+    // let secondary_command_buffers = (0..self.models)
+    let secondary_command_buffers = (0..self.data.instances_count)
     // let secondary_command_buffers = (0..3)
       .map( |i| self.update_secondary_command_buffer( image_index, i ) )
       .collect::<Result<Vec<_>, _>>()?;
@@ -509,9 +514,6 @@ impl App {
     // Model
 
     // TODO it have to be written ~~better~~ in correct way
-    self.device.destroy_buffer( self.data.instance_buffer, None );
-    self.device.free_memory( self.data.instance_buffer_memory, None );
-    create_instance_buffer( &self.instance, &self.device, &mut self.data )?;
 
     let x = (((model_index % 2) as f32) *  2.5) - 1.25;
     let y = (((model_index / 2) as f32) * -2.5) + 1.0;
@@ -547,7 +549,8 @@ impl App {
     self.device.begin_command_buffer( command_buffer, &info )?;
 
     self.device.cmd_bind_pipeline( command_buffer, vk::PipelineBindPoint::GRAPHICS, self.data.pipeline );
-    self.device.cmd_bind_vertex_buffers( command_buffer, 0, &[ self.data.vertex_buffer, self.data.instance_buffer ], &[ 0, 0 ] );
+    self.device.cmd_bind_vertex_buffers( command_buffer, 0, &[ self.data.vertex_buffer ], &[ 0, 0 ] );
+    // self.device.cmd_bind_vertex_buffers( command_buffer, 0, &[ self.data.vertex_buffer, self.data.instance_buffer ], &[ 0, 0 ] );
     self.device.cmd_bind_index_buffer( command_buffer, self.data.index_buffer, 0, vk::IndexType::UINT32 );
 
     self.device.cmd_bind_descriptor_sets(
@@ -575,7 +578,8 @@ impl App {
       opacity_bytes,
     );
 
-    self.device.cmd_draw_indexed( command_buffer, self.data.indices.len() as u32, self.data.instances_count, 0, 0, 0 );
+    self.device.cmd_draw_indexed( command_buffer, self.data.indices.len() as u32, 1, 0, 0, 0 );
+    // self.device.cmd_draw_indexed( command_buffer, self.data.indices.len() as u32, self.data.instances_count, 0, 0, 0 );
     self.device.end_command_buffer( command_buffer )?;
 
     Ok( command_buffer )
@@ -614,7 +618,7 @@ pub struct AppData {
   pub indices: Vec<u32>,
   pub vertex_buffer: vk::Buffer,
   pub vertex_buffer_memory: vk::DeviceMemory,
-  pub instances_count: u32,
+  pub instances_count: usize,
   pub instance_buffer: vk::Buffer,
   pub instance_buffer_memory: vk::DeviceMemory,
   pub index_buffer: vk::Buffer,
@@ -1141,19 +1145,21 @@ unsafe fn create_pipeline( device:&Device, data:&mut AppData ) -> Result<()> {
     .module( frag_shader_module )
     .name( b"main\0" );
 
-  let binding_descriptions = &[ Vertex::binding_description(), ModelInstance::binding_description() ];
-  let attribute_descriptions = {
-    let vertex_description = Vertex::attribute_description();
-    let instance_description = ModelInstance::attribute_description();
+  let binding_descriptions = &[ Vertex::binding_description() ];
+  let attribute_descriptions = Vertex::attribute_description();
+  // let binding_descriptions = &[ Vertex::binding_description(), ModelInstance::binding_description() ];
+  // let attribute_descriptions = {
+  //   let vertex_description = Vertex::attribute_description();
+  //   let instance_description = ModelInstance::attribute_description();
 
-    let mut descriptions: [ vk::VertexInputAttributeDescription; 4 ] = Default::default();
-    let (left, right) = descriptions.split_at_mut( vertex_description.len() );
+  //   let mut descriptions: [ vk::VertexInputAttributeDescription; 4 ] = Default::default();
+  //   let (left, right) = descriptions.split_at_mut( vertex_description.len() );
 
-    left.copy_from_slice( &vertex_description );
-    right.copy_from_slice( &instance_description );
+  //   left.copy_from_slice( &vertex_description );
+  //   right.copy_from_slice( &instance_description );
 
-    descriptions
-  };
+  //   descriptions
+  // };
 
   let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
     .vertex_binding_descriptions( binding_descriptions )
