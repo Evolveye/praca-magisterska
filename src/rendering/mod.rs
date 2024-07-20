@@ -1,6 +1,7 @@
 mod model;
 mod vertex;
 mod renderer;
+mod texture;
 
 use anyhow::Result;
 
@@ -29,6 +30,8 @@ pub fn render() -> Result<()> {
 
   let mut app = unsafe { App::create( &window, |a| a )? };
   let mut minimized = false;
+
+  unsafe { app.load_model()?; }
 
   event_loop.run( move |event, elwt| {
     match event {

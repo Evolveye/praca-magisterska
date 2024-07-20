@@ -55,6 +55,8 @@ const INDICES:&[ u32 ] = &[
 pub struct Model {
   pub vertices: Vec<Vertex>,
   pub indices: Vec<u32>,
+  // pub vertices_buffer: vk::Buffer,
+  // pub vertices_buffer_memory: vk::DeviceMemory,
 }
 
 impl Model {

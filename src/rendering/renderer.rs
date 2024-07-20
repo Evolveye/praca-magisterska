@@ -5,8 +5,8 @@
   clippy::unnecessary_wraps
 )]
 
-use anyhow::{anyhow, Result};
-use cgmath::{ point2, point3, vec2, vec3, Deg, InnerSpace, Point2, Point3, SquareMatrix, Vector3 };
+use anyhow::{ anyhow, Result };
+use cgmath::{ point2, point3, vec2, vec3, Deg, InnerSpace, Point2, Point3, Vector3 };
 use log::*;
 use thiserror::Error;
 
@@ -22,8 +22,6 @@ use vulkanalia::vk::KhrSwapchainExtension;
 use winit::window::Window;
 
 use std::collections::HashSet;
-use std::io::BufReader;
-use std::fs::File;
 use std::os::raw::c_void;
 use std::ffi::CStr;
 use std::mem::size_of;
@@ -32,6 +30,7 @@ use std::time::{ Instant, Duration };
 
 use super::model::{ Model, ModelInstance };
 use super::vertex::Vertex;
+use super::texture::Texture;
 
 type Vec3 = cgmath::Vector3<f32>;
 type Mat4 = cgmath::Matrix4<f32>;
@@ -189,11 +188,12 @@ impl App {
     let mut data = AppData::default();
     let instance = create_instance( window, &entry, &mut data )?;
 
-    data.instances_count = 5;
+    data.instances_count = 1;
     data.surface = vk_window::create_surface( &instance, &window, &window )?;
     pick_physical_device( &instance, &mut data )?;
 
     let device = create_logical_device( &entry, &instance, &mut data )?;
+
     create_swapchain( window, &instance, &device, &mut data )?;
     create_swapchain_image_views( &device, &mut data )?;
     create_render_pass( &instance, &device, &mut data )?;
@@ -203,22 +203,23 @@ impl App {
     create_color_objects( &instance, &device, &mut data )?;
     create_depth_objects( &instance, &device, &mut data )?;
     create_framebuffers( &device, &mut data )?;
-    // create_texture_image( &instance, &device, &mut data, "src/resources/viking_room.png" )?;
-    create_texture_image( &instance, &device, &mut data, "src/resources/barrel.png" )?;
-    create_texture_image_view( &device, &mut data )?;
-    create_texture_sampler( &device, &mut data )?;
-    // load_model( &mut data, "cube" )?;
-    // load_model( &mut data, "src/resources/cube.obj" )?;
-    // load_model( &mut data, "src/resources/viking_room.obj" )?;
-    load_model( &mut data, "src/resources/barrel.obj" )?;
-    // load_model( &mut data, "src/resources/bunny.obj" )?;
-    create_vertex_buffer( &instance, &device, &mut data )?;
-    create_index_buffer( &instance, &device, &mut data )?;
-    // create_instance_buffer( &instance, &device, &mut data )?;
+
     create_uniform_buffers( &instance, &device, &mut data )?;
     create_descriptor_pool( &device, &mut data )?;
     create_descriptor_sets( &device, &mut data )?;
     create_command_buffers( &device, &mut data )?;
+
+    // // create_texture_image( &instance, &device, &mut data, "src/resources/viking_room.png" )?;
+    data.texture = Texture::load( &instance, &device, &mut data, "src/resources/barrel.png" )?;
+    // // load_model( &mut data, "cube" )?;
+    // // load_model( &mut data, "src/resources/cube.obj" )?;
+    // // load_model( &mut data, "src/resources/viking_room.obj" )?;
+    // // load_model( &mut data, "src/resources/bunny.obj" )?;
+    // load_model( &mut data, "src/resources/barrel.obj" )?;
+    // create_vertex_buffer( &instance, &device, &mut data )?;
+    // create_index_buffer( &instance, &device, &mut data )?;
+    // // create_instance_buffer( &instance, &device, &mut data )?;
+
     create_sync_objects( &device, &mut data )?;
 
     Ok( Self {
@@ -235,18 +236,39 @@ impl App {
     } )
   }
 
+  pub unsafe fn load_model( &mut self ) -> Result<()>  {
+    let App { ref instance, ref device, ref mut data, .. } = self;
+
+    // create_texture_image( instance, device, data, "src/resources/viking_room.png" )?;
+    // create_texture_image( instance, device, data, "src/resources/barrel.png" )?;
+    // create_texture_image_view( device, data )?;
+    // create_texture_sampler( device, data )?;
+    // load_model( data, "cube" )?;
+    // load_model( data, "src/resources/cube.obj" )?;
+    // load_model( data, "src/resources/viking_room.obj" )?;
+    // load_model( data, "src/resources/bunny.obj" )?;
+    load_model( data, "src/resources/barrel.obj" )?;
+    create_vertex_buffer( instance, device, data )?;
+    create_index_buffer( instance, device, data )?;
+    // create_instance_buffer( instance, device, data )?;
+
+    Ok(())
+  }
+
   pub unsafe fn destroy( &mut self ) {
     self.device.device_wait_idle().unwrap();
 
     self.destroy_swapchain();
+    self.data.texture.destroy( &self.device );
 
-    self.device.destroy_sampler( self.data.texture_sampler, None );
-    self.device.destroy_image_view( self.data.texture_image_view, None );
+    // self.device.destroy_sampler( self.data.texture_sampler, None );
+    // self.device.destroy_image_view( self.data.texture_image_view, None );
 
-    self.device.destroy_image( self.data.texture_image, None );
-    self.device.free_memory( self.data.texture_image_memory, None );
+    // self.device.destroy_image( self.data.texture_image, None );
+    // self.device.free_memory( self.data.texture_image_memory, None );
 
-    self.device.destroy_descriptor_set_layout( self.data.descriptor_set_layout, None );
+    self.device.destroy_descriptor_set_layout( self.data.uniform_descriptor_set_layout, None );
+    self.device.destroy_descriptor_set_layout( self.data.texture_descriptor_set_layout, None );
 
     // self.device.destroy_buffer( self.data.instance_buffer, None );
     // self.device.free_memory( self.data.instance_buffer_memory, None );
@@ -273,7 +295,7 @@ impl App {
     self.instance.destroy_instance( None );
   }
 
-  unsafe fn recreate_swapchain(&mut self, window:&Window) -> Result<()> {
+  unsafe fn recreate_swapchain( &mut self, window:&Window ) -> Result<()> {
     self.device.device_wait_idle()?;
     self.destroy_swapchain();
 
@@ -284,9 +306,12 @@ impl App {
     create_color_objects( &self.instance, &self.device, &mut self.data )?;
     create_depth_objects( &self.instance, &self.device, &mut self.data )?;
     create_framebuffers( &self.device, &mut self.data )?;
+
     create_uniform_buffers( &self.instance, &self.device, &mut self.data )?;
     create_descriptor_pool( &self.device, &mut self.data )?;
     create_descriptor_sets( &self.device, &mut self.data )?;
+    // let mut texture = self.data.texture;
+    self.data.texture.recreate_descriptor_set( &self.device, self.data.texture_descriptor_set_layout, self.data.descriptor_pool )?;
     create_command_buffers( &self.device, &mut self.data )?;
 
     self.data.images_in_flight.resize( self.data.swapchain_images.len() , vk::Fence::null() );
@@ -296,6 +321,7 @@ impl App {
 
   unsafe fn destroy_swapchain( &mut self ) {
     self.device.destroy_descriptor_pool( self.data.descriptor_pool, None );
+
     self.data.uniform_buffers_memory.iter().for_each( |m| self.device.free_memory( *m, None ) );
     self.data.uniform_buffers.iter().for_each( |b| self.device.destroy_buffer( *b, None ) );
 
@@ -515,8 +541,8 @@ impl App {
 
     // TODO it have to be written ~~better~~ in correct way
 
-    let x = (((model_index % 2) as f32) *  2.5) - 1.25;
-    let y = (((model_index / 2) as f32) * -2.5) + 1.0;
+    let x = (((model_index % 10) as f32) *  2.5) - 1.25;
+    let y = (((model_index / 10) as f32) * -2.5) + 1.0;
     let time = self.last_tick_time.elapsed().as_secs_f32();
 
     let model = Mat4::from_translation( vec3( x, y, 0.0 ) );
@@ -558,7 +584,7 @@ impl App {
       vk::PipelineBindPoint::GRAPHICS,
       self.data.pipeline_layout,
       0,
-      &[ self.data.descriptor_sets[ image_index ] ],
+      &[ self.data.descriptor_sets[ image_index ], self.data.texture.descriptor_set ],
       &[]
     );
 
@@ -602,7 +628,8 @@ pub struct AppData {
   pub swapchain_images: Vec<vk::Image>,
   pub swapchain_image_views: Vec<vk::ImageView>,
   pub render_pass: vk::RenderPass,
-  pub descriptor_set_layout: vk::DescriptorSetLayout,
+  pub uniform_descriptor_set_layout: vk::DescriptorSetLayout,
+  pub texture_descriptor_set_layout: vk::DescriptorSetLayout,
   pub pipeline_layout: vk::PipelineLayout,
   pub pipeline: vk::Pipeline,
   pub framebuffers: Vec<vk::Framebuffer>,
@@ -627,14 +654,15 @@ pub struct AppData {
   pub uniform_buffers_memory: Vec<vk::DeviceMemory>,
   pub descriptor_pool: vk::DescriptorPool,
   pub descriptor_sets: Vec<vk::DescriptorSet>,
-  pub mip_levels: u32,
+  // pub mip_levels: u32,
   pub color_image: vk::Image,
   pub color_image_memory: vk::DeviceMemory,
   pub color_image_view: vk::ImageView,
-  pub texture_image: vk::Image,
-  pub texture_image_memory: vk::DeviceMemory,
-  pub texture_image_view: vk::ImageView,
-  pub texture_sampler: vk::Sampler,
+  pub texture: Texture,
+  // pub texture_image: vk::Image,
+  // pub texture_image_memory: vk::DeviceMemory,
+  // pub texture_image_view: vk::ImageView,
+  // pub texture_sampler: vk::Sampler,
   pub depth_image: vk::Image,
   pub depth_image_memory: vk::DeviceMemory,
   pub depth_image_view: vk::ImageView,
@@ -966,7 +994,7 @@ unsafe fn get_depth_format( instance:&Instance, data:&AppData ) -> Result<vk::Fo
   get_supported_format( instance, data, candidates, vk::ImageTiling::OPTIMAL, vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT )
 }
 
-unsafe fn get_memory_type_index( instance:&Instance, data:&mut AppData, properties:vk::MemoryPropertyFlags, requirements:vk::MemoryRequirements ) -> Result<u32> {
+unsafe fn get_memory_type_index( instance:&Instance, data:&AppData, properties:vk::MemoryPropertyFlags, requirements:vk::MemoryRequirements ) -> Result<u32> {
   let memory = instance.get_physical_device_memory_properties( data.physical_device );
 
   (0..memory.memory_type_count)
@@ -1113,17 +1141,23 @@ unsafe fn create_descriptor_set_layout( device:&Device, data:&mut AppData ) -> R
     .descriptor_count( 1 )
     .stage_flags( vk::ShaderStageFlags::VERTEX );
 
+  let bindings = &[ ubo_binding ];
+  let info = vk::DescriptorSetLayoutCreateInfo::builder()
+    .bindings( bindings );
+
+  data.uniform_descriptor_set_layout = device.create_descriptor_set_layout( &info, None )?;
+
   let sampler_binding = vk::DescriptorSetLayoutBinding::builder()
-    .binding( 1 )
+    .binding( 0 )
     .descriptor_type( vk::DescriptorType::COMBINED_IMAGE_SAMPLER )
     .descriptor_count( 1 )
     .stage_flags( vk::ShaderStageFlags::FRAGMENT );
 
-  let bindings = &[ ubo_binding, sampler_binding ];
+  let bindings = &[ sampler_binding ];
   let info = vk::DescriptorSetLayoutCreateInfo::builder()
     .bindings( bindings );
 
-  data.descriptor_set_layout = device.create_descriptor_set_layout( &info, None )?;
+  data.texture_descriptor_set_layout = device.create_descriptor_set_layout( &info, None )?;
 
   Ok(())
 }
@@ -1245,7 +1279,7 @@ unsafe fn create_pipeline( device:&Device, data:&mut AppData ) -> Result<()> {
     .offset( 64 )
     .size( 4 );
 
-  let set_layouts = &[ data.descriptor_set_layout ];
+  let set_layouts = &[ data.uniform_descriptor_set_layout, data.texture_descriptor_set_layout ];
   let push_constant_ranges = &[ vert_push_constant_range, frag_push_constant_range ];
   let layout_info = vk::PipelineLayoutCreateInfo::builder()
     .set_layouts( set_layouts )
@@ -1326,7 +1360,7 @@ unsafe fn create_command_pools( instance:&Instance, device:&Device, data:&mut Ap
   Ok(())
 }
 
-unsafe fn create_buffer( instance:&Instance, device:&Device, data:&mut AppData, size:vk::DeviceSize, usage:vk::BufferUsageFlags, properties:vk::MemoryPropertyFlags ) -> Result<(vk::Buffer, vk::DeviceMemory)>{
+pub unsafe fn create_buffer( instance:&Instance, device:&Device, data:&AppData, size:vk::DeviceSize, usage:vk::BufferUsageFlags, properties:vk::MemoryPropertyFlags ) -> Result<(vk::Buffer, vk::DeviceMemory)>{
   let buffer_info = vk::BufferCreateInfo::builder()
     .size( size )
     .usage( usage )
@@ -1347,7 +1381,7 @@ unsafe fn create_buffer( instance:&Instance, device:&Device, data:&mut AppData, 
   Ok(( buffer, buffer_memory ))
 }
 
-unsafe fn begin_single_time_commands( device:&Device, data:&mut AppData ) -> Result<vk::CommandBuffer> {
+pub unsafe fn begin_single_time_commands( device:&Device, data:&AppData ) -> Result<vk::CommandBuffer> {
   let info = vk::CommandBufferAllocateInfo::builder()
     .level( vk::CommandBufferLevel::PRIMARY )
     .command_pool( data.command_pool )
@@ -1363,7 +1397,7 @@ unsafe fn begin_single_time_commands( device:&Device, data:&mut AppData ) -> Res
   Ok( command_buffer )
 }
 
-unsafe fn end_single_time_commands( device:&Device, data:&mut AppData, command_buffer:vk::CommandBuffer ) -> Result<()> {
+pub unsafe fn end_single_time_commands( device:&Device, data:&AppData, command_buffer:vk::CommandBuffer ) -> Result<()> {
   device.end_command_buffer( command_buffer )?;
 
   let command_buffers = &[ command_buffer ];
@@ -1388,7 +1422,7 @@ unsafe fn copy_buffer( device:&Device, data:&mut AppData, source:vk::Buffer, des
   Ok(())
 }
 
-unsafe fn copy_buffer_to_image( device:&Device, data:&mut AppData, buffer:vk::Buffer, image:vk::Image, width:u32, height:u32 ) -> Result<()> {
+pub unsafe fn copy_buffer_to_image( device:&Device, data:&AppData, buffer:vk::Buffer, image:vk::Image, width:u32, height:u32 ) -> Result<()> {
   let command_buffer = begin_single_time_commands( device, data )?;
   let subresource = vk::ImageSubresourceLayers::builder()
     .aspect_mask( vk::ImageAspectFlags::COLOR )
@@ -1405,135 +1439,6 @@ unsafe fn copy_buffer_to_image( device:&Device, data:&mut AppData, buffer:vk::Bu
     .image_extent( vk::Extent3D { width, height, depth:1 } );
 
   device.cmd_copy_buffer_to_image( command_buffer, buffer, image, vk::ImageLayout::TRANSFER_DST_OPTIMAL, &[ region ] );
-
-  end_single_time_commands( device, data, command_buffer )?;
-
-  Ok(())
-}
-
-unsafe fn generate_mipmaps( instance:&Instance, device:&Device, data:&mut AppData, image:vk::Image, format:vk::Format, width:u32, height:u32, mip_levels:u32 ) -> Result<()> {
-  if !instance.get_physical_device_format_properties( data.physical_device, format )
-    .optimal_tiling_features
-    .contains( vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR )
-  {
-    return Err( anyhow!( "Texture image format does not support linear blitting!" ) )
-  }
-
-  let command_buffer = begin_single_time_commands( device, data )?;
-
-  let subresource = vk::ImageSubresourceRange::builder()
-    .aspect_mask( vk::ImageAspectFlags::COLOR )
-    .base_array_layer( 0 )
-    .layer_count( 1 )
-    .level_count( 1 );
-
-  let mut barrier = vk::ImageMemoryBarrier::builder()
-    .image( image )
-    .src_queue_family_index( vk::QUEUE_FAMILY_IGNORED )
-    .dst_queue_family_index( vk::QUEUE_FAMILY_IGNORED )
-    .subresource_range( subresource );
-
-  let mut mip_width = width;
-  let mut mip_height = height;
-
-  for i in 1..mip_levels {
-    barrier.subresource_range.base_mip_level = i - 1;
-    barrier.old_layout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
-    barrier.new_layout = vk::ImageLayout::TRANSFER_SRC_OPTIMAL;
-    barrier.src_access_mask = vk::AccessFlags::TRANSFER_WRITE;
-    barrier.dst_access_mask = vk::AccessFlags::TRANSFER_READ;
-
-    device.cmd_pipeline_barrier(
-      command_buffer,
-      vk::PipelineStageFlags::TRANSFER,
-      vk::PipelineStageFlags::TRANSFER,
-      vk::DependencyFlags::empty(),
-      &[] as &[vk::MemoryBarrier],
-      &[] as &[vk::BufferMemoryBarrier],
-      &[ barrier ],
-    );
-
-    let src_subresource = vk::ImageSubresourceLayers::builder()
-      .aspect_mask( vk::ImageAspectFlags::COLOR )
-      .mip_level( i - 1 )
-      .base_array_layer( 0 )
-      .layer_count( 1 );
-
-    let dst_subresource = vk::ImageSubresourceLayers::builder()
-      .aspect_mask( vk::ImageAspectFlags::COLOR )
-      .mip_level( i )
-      .base_array_layer( 0 )
-      .layer_count( 1 );
-
-    let blit = vk::ImageBlit::builder()
-      .src_offsets([
-        vk::Offset3D { x:0, y:0, z:0 },
-        vk::Offset3D {
-          x: mip_width as i32,
-          y: mip_height as i32,
-          z: 1
-        },
-      ])
-      .src_subresource( src_subresource )
-      .dst_offsets([
-        vk::Offset3D { x:0, y:0, z:0 },
-        vk::Offset3D {
-          x: (if mip_width  > 1 { mip_width  / 2 } else { 1 }) as i32,
-          y: (if mip_height > 1 { mip_height / 2 } else { 1 }) as i32,
-          z: 1
-        },
-      ])
-      .dst_subresource( dst_subresource );
-
-    device.cmd_blit_image(
-      command_buffer,
-      image,
-      vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-      image,
-      vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-      &[ blit ],
-      vk::Filter::LINEAR,
-    );
-
-    barrier.old_layout = vk::ImageLayout::TRANSFER_SRC_OPTIMAL;
-    barrier.new_layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
-    barrier.src_access_mask = vk::AccessFlags::TRANSFER_READ;
-    barrier.dst_access_mask = vk::AccessFlags::SHADER_READ;
-
-    device.cmd_pipeline_barrier(
-      command_buffer,
-      vk::PipelineStageFlags::TRANSFER,
-      vk::PipelineStageFlags::FRAGMENT_SHADER,
-      vk::DependencyFlags::empty(),
-      &[] as &[vk::MemoryBarrier],
-      &[] as &[vk::BufferMemoryBarrier],
-      &[ barrier ],
-    );
-
-    if mip_width > 1 {
-      mip_width /= 2;
-    }
-
-    if mip_height > 1 {
-      mip_height /= 2;
-    }
-  }
-
-  barrier.subresource_range.base_mip_level = mip_levels - 1;
-  barrier.old_layout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
-  barrier.new_layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
-  barrier.src_access_mask = vk::AccessFlags::TRANSFER_WRITE;
-  barrier.dst_access_mask = vk::AccessFlags::SHADER_READ;
-
-  device.cmd_pipeline_barrier(
-    command_buffer,
-    vk::PipelineStageFlags::TRANSFER,
-    vk::PipelineStageFlags::FRAGMENT_SHADER,
-    vk::DependencyFlags::empty(),
-    &[] as &[vk::MemoryBarrier],
-    &[] as &[vk::BufferMemoryBarrier],
-    &[ barrier ],
-  );
 
   end_single_time_commands( device, data, command_buffer )?;
 
@@ -1566,7 +1471,7 @@ unsafe fn create_color_objects( instance:&Instance, device:&Device, data:&mut Ap
   Ok(())
 }
 
-unsafe fn create_image_view( device:&Device, image:vk::Image, format:vk::Format, aspects:vk::ImageAspectFlags, mip_levels:u32 ) -> Result<vk::ImageView> {
+pub unsafe fn create_image_view( device:&Device, image:vk::Image, format:vk::Format, aspects:vk::ImageAspectFlags, mip_levels:u32 ) -> Result<vk::ImageView> {
   let subresource_range = vk::ImageSubresourceRange::builder()
     .aspect_mask( aspects )
     .base_mip_level( 0 )
@@ -1582,10 +1487,10 @@ unsafe fn create_image_view( device:&Device, image:vk::Image, format:vk::Format,
 
   Ok( device.create_image_view( &info, None )? )
 }
-unsafe fn create_image(
+pub unsafe fn create_image(
   instance: &Instance,
   device: &Device,
-  data: &mut AppData,
+  data: &AppData,
   width: u32,
   height: u32,
   mip_levels: u32,
@@ -1643,99 +1548,7 @@ unsafe fn create_depth_objects( instance:&Instance, device:&Device, data:&mut Ap
   Ok(())
 }
 
-unsafe fn create_texture_image( instance:&Instance, device:&Device, data:&mut AppData, src:&str ) -> Result<()> {
-  let image = match File::open( src ) {
-    Ok( file ) => file,
-    Err( err ) => {
-      println!( "Current path: {:?}", std::env::current_dir() );
-      println!( "{:?}", err );
-      return Err( anyhow!( err ) );
-    }
-  };
-
-  let decoder = png::Decoder::new( image );
-  let mut reader = decoder.read_info()?;
-
-  let mut pixels = vec![ 0; reader.info().raw_bytes() ];
-  reader.next_frame( &mut pixels )?;
-
-  let size = reader.info().raw_bytes() as u64;
-  let ( width, height ) = reader.info().size();
-
-  data.mip_levels = (width.max( height ) as f32).log2().floor() as u32 + 1;
-
-  let (stagging_buffer, stagging_buffer_memory) = create_buffer(
-    instance, device, data, size,
-    vk::BufferUsageFlags::TRANSFER_SRC,
-    vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-  )?;
-
-  let memory = device.map_memory( stagging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
-
-  memcpy( pixels.as_ptr(), memory.cast(), pixels.len() );
-
-  device.unmap_memory( stagging_buffer_memory );
-
-  let ( texture_image, texture_image_memory ) = create_image(
-    instance, device, data, width, height,
-    data.mip_levels,
-    vk::SampleCountFlags::_1,
-    vk::Format::R8G8B8A8_SRGB,
-    vk::ImageTiling::OPTIMAL,
-    vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::TRANSFER_SRC,
-    vk::MemoryPropertyFlags::DEVICE_LOCAL
-  )?;
-
-  data.texture_image = texture_image;
-  data.texture_image_memory = texture_image_memory;
-
-  transition_image_layout(
-    device, data, data.texture_image,
-    vk::Format::R8G8B8A8_SRGB,
-    vk::ImageLayout::UNDEFINED,
-    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-    data.mip_levels
-  )?;
-
-  copy_buffer_to_image( device, data, stagging_buffer, data.texture_image, width, height )?;
-
-  device.destroy_buffer( stagging_buffer, None );
-  device.free_memory( stagging_buffer_memory, None );
-
-  generate_mipmaps( instance, device, data, data.texture_image, vk::Format::R8G8B8A8_SRGB, width, height, data.mip_levels )?;
-
-  Ok(())
-}
-
-unsafe fn create_texture_image_view( device:&Device, data:&mut AppData ) -> Result<()> {
-  data.texture_image_view = create_image_view( device, data.texture_image, vk::Format::R8G8B8A8_SRGB, vk::ImageAspectFlags::COLOR, data.mip_levels )?;
-  Ok(())
-}
-
-unsafe fn create_texture_sampler( device:&Device, data:&mut AppData ) -> Result<()> {
-  let info = vk::SamplerCreateInfo::builder()
-    .mag_filter( vk::Filter::LINEAR )
-    .min_filter( vk::Filter::LINEAR )
-    .address_mode_u( vk::SamplerAddressMode::REPEAT )
-    .address_mode_v( vk::SamplerAddressMode::REPEAT )
-    .address_mode_w( vk::SamplerAddressMode::REPEAT )
-    .anisotropy_enable( true )
-    .max_anisotropy( 16.0 )
-    .border_color( vk::BorderColor::INT_OPAQUE_BLACK )
-    .unnormalized_coordinates( false )
-    .compare_enable( false )
-    .compare_op( vk::CompareOp::ALWAYS )
-    .mipmap_mode( vk::SamplerMipmapMode::LINEAR )
-    .min_lod( 0.0 )
-    .max_lod( data.mip_levels as f32 )
-    .mip_lod_bias( 0.0 );
-
-  data.texture_sampler = device.create_sampler( &info, None )?;
-
-  Ok(())
-}
-
-unsafe fn transition_image_layout( device:&Device, data:&mut AppData, image:vk::Image, format:vk::Format, old_layout:vk::ImageLayout, new_layout:vk::ImageLayout, mip_levels:u32 ) -> Result<()> {
+pub unsafe fn transition_image_layout( device:&Device, data:&AppData, image:vk::Image, format:vk::Format, old_layout:vk::ImageLayout, new_layout:vk::ImageLayout, mip_levels:u32 ) -> Result<()> {
   let (
     src_access_mask,
     dst_access_mask,
@@ -1970,12 +1783,12 @@ unsafe fn create_descriptor_pool( device:&Device, data:&mut AppData ) -> Result<
 
   let sampler_size = vk::DescriptorPoolSize::builder()
     .type_( vk::DescriptorType::COMBINED_IMAGE_SAMPLER )
-    .descriptor_count( data.swapchain_images.len() as u32 );
+    .descriptor_count( 1 );
 
   let pool_sizes = &[ ubo_size, sampler_size ];
   let info = vk::DescriptorPoolCreateInfo::builder()
     .pool_sizes( pool_sizes )
-    .max_sets( data.swapchain_images.len() as u32 );
+    .max_sets( data.swapchain_images.len() as u32 + 1 );
 
   data.descriptor_pool = device.create_descriptor_pool( &info, None )?;
 
@@ -1983,7 +1796,7 @@ unsafe fn create_descriptor_pool( device:&Device, data:&mut AppData ) -> Result<
 }
 
 unsafe fn create_descriptor_sets( device:&Device, data:&mut AppData ) -> Result<()> {
-  let layouts = vec![ data.descriptor_set_layout; data.swapchain_images.len() ];
+  let layouts = vec![ data.uniform_descriptor_set_layout; data.swapchain_images.len() ];
   let info = vk::DescriptorSetAllocateInfo::builder()
     .descriptor_pool( data.descriptor_pool )
     .set_layouts( &layouts );
@@ -2004,23 +1817,7 @@ unsafe fn create_descriptor_sets( device:&Device, data:&mut AppData ) -> Result<
       .descriptor_type( vk::DescriptorType::UNIFORM_BUFFER)
       .buffer_info( buffer_info );
 
-    let info = vk::DescriptorImageInfo::builder()
-      .image_layout( vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL )
-      .image_view( data.texture_image_view )
-      .sampler( data.texture_sampler );
-
-    let image_info = &[ info ];
-    let sampler_write = vk::WriteDescriptorSet::builder()
-      .dst_set( data.descriptor_sets[ i ] )
-      .dst_binding( 1 )
-      .dst_array_element( 0 )
-      .descriptor_type( vk::DescriptorType::COMBINED_IMAGE_SAMPLER )
-      .image_info( image_info );
-
-    device.update_descriptor_sets(
-      &[ ubo_write, sampler_write ],
-      &[] as &[ vk::CopyDescriptorSet ]
-    );
+    device.update_descriptor_sets( &[ ubo_write ], &[] as &[ vk::CopyDescriptorSet ] );
   }
 
   Ok(())

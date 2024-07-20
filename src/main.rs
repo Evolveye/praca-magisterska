@@ -1,7 +1,7 @@
 // mod world;
 mod rendering;
 
-use std::io;
+// use std::io;
 
 fn main() {
     let _ = rendering::render();
