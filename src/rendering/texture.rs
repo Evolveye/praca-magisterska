@@ -59,7 +59,7 @@ impl Texture {
     let mip_levels = (width.max( height ) as f32).log2().floor() as u32 + 1;
 
     let (stagging_buffer, stagging_buffer_memory) = create_buffer(
-      instance, device, data, size,
+      instance, device, data.physical_device, size,
       vk::BufferUsageFlags::TRANSFER_SRC,
       vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
     )?;
@@ -176,7 +176,7 @@ impl Texture {
       return Err( anyhow!( "Texture image format does not support linear blitting!" ) )
     }
 
-    let command_buffer = begin_single_time_commands( device, data )?;
+    let command_buffer = begin_single_time_commands( device, data.command_pool )?;
 
     let subresource = vk::ImageSubresourceRange::builder()
       .aspect_mask( vk::ImageAspectFlags::COLOR )
@@ -292,7 +292,7 @@ impl Texture {
       &[ barrier ],
     );
 
-    end_single_time_commands( device, data, command_buffer )?;
+    end_single_time_commands( device, data.command_pool, data.graphics_queue, command_buffer )?;
 
     Ok(())
   }
