@@ -27,6 +27,7 @@ use std::ffi::CStr;
 use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
 use std::time::{ Instant, Duration };
+use std::f32::consts::PI;
 
 use super::model::{ Model, ModelInstance };
 use super::vertex::Vertex;
@@ -40,6 +41,7 @@ const VALIDATION_ENABLED:bool = cfg!( debug_assertions );
 const VALIDATION_LAYER:vk::ExtensionName = vk::ExtensionName::from_bytes( b"VK_LAYER_KHRONOS_validation" );
 const DEVICE_EXTENSIONS:&[ vk::ExtensionName ] = &[ vk::KHR_SWAPCHAIN_EXTENSION.name ];
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
+const INSTANCED_RENDERING:bool = false;
 
 #[derive(Clone, Debug)]
 pub struct ControlManager {
@@ -136,6 +138,7 @@ pub struct App {
   pub device: Device,
   pub frame: usize,
   pub resized: bool,
+  pub start_time: Instant,
   pub last_tick_time: Instant,
   pub focused: bool,
   pub settings: AppSettings,
@@ -152,7 +155,7 @@ impl App {
     let mut data = AppData::default();
     let instance = create_instance( window, &entry, &mut data )?;
 
-    data.instances_count = 1;
+    data.instances_count = 20;
     data.surface = vk_window::create_surface( &instance, &window, &window )?;
     pick_physical_device( &instance, &mut data )?;
 
@@ -173,7 +176,10 @@ impl App {
     create_descriptor_sets( &device, &mut data )?;
     create_command_buffers( &device, &mut data )?;
 
+    create_sync_objects( &device, &mut data )?;
+
     // // create_texture_image( &instance, &device, &mut data, "src/resources/viking_room.png" )?;
+    // data.texture = Texture::load( &instance, &device, &mut data, "src/resources/viking_room.png" )?;
     data.texture = Texture::load( &instance, &device, &mut data, "src/resources/barrel.png" )?;
     // // load_model( &mut data, "cube" )?;
     // // load_model( &mut data, "src/resources/cube.obj" )?;
@@ -184,18 +190,17 @@ impl App {
     // create_index_buffer( &instance, &device, &mut data )?;
     // // create_instance_buffer( &instance, &device, &mut data )?;
 
-    create_sync_objects( &device, &mut data )?;
-
     Ok( Self {
       entry, instance, data, device, geometry_generator,
       models: 1,
       frame: 0,
       resized: false,
       focused: true,
+      start_time: Instant::now(),
       last_tick_time: Instant::now(),
       fps_time: Instant::now(),
       fps_count: 0,
-      control_manager: ControlManager::new( point3( 0.0, 0.0, 6.0 ), point3( 0.0, 0.0, 0.0 ) ),
+      control_manager: ControlManager::new( point3( 0.0, 20.0, -35.0 ), point3( 0.0, 0.0, -8.0 ) ),
       settings: AppSettings::new(),
     } )
   }
@@ -480,9 +485,7 @@ impl App {
 
     self.device.cmd_begin_render_pass( command_buffer, &render_pass_begin, vk::SubpassContents::SECONDARY_COMMAND_BUFFERS );
 
-    // let secondary_command_buffers = (0..self.models)
-    let secondary_command_buffers = (0..self.data.instances_count)
-    // let secondary_command_buffers = (0..3)
+    let secondary_command_buffers = (0..if INSTANCED_RENDERING { self.models } else { self.data.instances_count })
       .map( |i| self.update_secondary_command_buffer( image_index, i ) )
       .collect::<Result<Vec<_>, _>>()?;
 
@@ -514,11 +517,16 @@ impl App {
 
     // TODO it have to be written ~~better~~ in correct way
 
-    let x = (((model_index % 10) as f32) *  2.5) - 1.25;
-    let y = (((model_index / 10) as f32) * -2.5) + 1.0;
+    let modulo_value = 10;
+    let radius = 10.0;
+
+    let theta = 2.0 * PI * (model_index as f32) / (self.data.instances_count as f32);
+    let x = radius * theta.cos();
+    let z = radius * theta.sin();
+
     let time = self.last_tick_time.elapsed().as_secs_f32();
 
-    let model = Mat4::from_translation( vec3( x, y, 0.0 ) );
+    let model = Mat4::from_translation( vec3( x, z / 3.0, z ) );
     // * Mat4::from_axis_angle(
     //   vec3( 0.0, 0.0, 1.0 ),
     //   Deg( 90.0 ) * time
@@ -529,9 +537,17 @@ impl App {
       size_of::<Mat4>()
     );
 
-    let opacity = 0.2 as f32;
+    // let opacity = 0.2 as f32;
     // let opacity = 1.0f32; //(model_index + 1) as f32 * 0.25;
     // let opacity = (4 - model_index) as f32 * 0.25;
+
+    let elapsed = self.start_time.elapsed().as_secs_f32();
+    let opacity = if (elapsed as usize + model_index) % 5 == 0 {
+      ((elapsed.fract() - 0.5) * 2.0).abs()
+    } else {
+      1.0
+    };
+
     let opacity_bytes = &opacity.to_ne_bytes()[..];
 
     //
@@ -1125,8 +1141,8 @@ unsafe fn create_descriptor_set_layout( device:&Device, data:&mut AppData ) -> R
 }
 
 unsafe fn create_pipeline( device:&Device, data:&mut AppData ) -> Result<()> {
-  let vert = include_bytes!( "./shaders/vert.spv" );
-  let frag = include_bytes!( "./shaders/frag.spv" );
+  let vert = include_bytes!( "./shaders/model-textured-lighted/vert.spv" );
+  let frag = include_bytes!( "./shaders/model-textured-lighted/frag.spv" );
 
   let vert_shader_module = create_shader_module( device, vert )?;
   let frag_shader_module = create_shader_module( device, frag )?;
@@ -1141,6 +1157,7 @@ unsafe fn create_pipeline( device:&Device, data:&mut AppData ) -> Result<()> {
     .module( frag_shader_module )
     .name( b"main\0" );
 
+  // TODO INSTANCED_RENDERING
   let binding_descriptions = &[ Vertex::binding_description() ];
   let attribute_descriptions = Vertex::attribute_description();
   // let binding_descriptions = &[ Vertex::binding_description(), ModelInstance::binding_description() ];
@@ -1148,7 +1165,7 @@ unsafe fn create_pipeline( device:&Device, data:&mut AppData ) -> Result<()> {
   //   let vertex_description = Vertex::attribute_description();
   //   let instance_description = ModelInstance::attribute_description();
 
-  //   let mut descriptions: [ vk::VertexInputAttributeDescription; 4 ] = Default::default();
+  //   let mut descriptions: [ vk::VertexInputAttributeDescription; 5 ] = Default::default();
   //   let (left, right) = descriptions.split_at_mut( vertex_description.len() );
 
   //   left.copy_from_slice( &vertex_description );
@@ -1579,68 +1596,6 @@ pub unsafe fn transition_image_layout( device:&Device, data:&AppData, image:vk::
   );
 
   end_single_time_commands( device, data.command_pool, data.graphics_queue, command_buffer )?;
-
-  Ok(())
-}
-
-unsafe fn create_instance_buffer( instance:&Instance, device:&Device, data:&mut AppData ) -> Result<()> {
-  let size = (size_of::<ModelInstance>() * data.instances_count as usize) as u64;
-  let ( staging_buffer, staging_buffer_memory ) = create_buffer(
-    instance,
-    device,
-    data.physical_device,
-    size,
-    vk::BufferUsageFlags::TRANSFER_SRC,
-    vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-  )?;
-
-  let memory = device.map_memory( staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
-
-  // TODO Instances data
-  let instances_data = (0..data.instances_count).map( |model_index| {
-    let x = ((model_index % 2) as f32) *  4.0;
-    let y = ((model_index / 2) as f32) * -8.0;
-    // let time = self.last_tick_time.elapsed().as_secs_f32();
-
-    let translate = Vector3::new( x, y, 0.0 );
-    // let transform = Mat4::from_translation( vec3( x, y, 0.0 ) );
-    // * Mat4::from_axis_angle(
-    //   vec3( 0.0, 0.0, 1.0 ),
-    //   Deg( 90.0 ) * time
-    // );
-
-    // let model_bytes = std::slice::from_raw_parts(
-    //   &model as *const Mat4 as *const u8,
-    //   size_of::<Mat4>()
-    // );
-
-    // let opacity = 1.0f32; //(model_index + 1) as f32 * 0.25;
-    // let opacity = (4 - model_index) as f32 * 0.25;
-    // let opacity_bytes = &opacity.to_ne_bytes()[..];
-
-    ModelInstance { translate }
-  } )
-  .collect::<Vec<ModelInstance>>();
-
-  memcpy( instances_data.as_ptr(), memory.cast(), data.instances_count as usize );
-  device.unmap_memory( staging_buffer_memory );
-
-  let ( instance_buffer, instance_buffer_memory ) = create_buffer(
-    instance,
-    device,
-    data.physical_device,
-    size,
-    vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
-    vk::MemoryPropertyFlags::DEVICE_LOCAL,
-  )?;
-
-  data.instance_buffer = instance_buffer;
-  data.instance_buffer_memory = instance_buffer_memory;
-
-  copy_buffer( device, data.command_pool, data.graphics_queue, staging_buffer, instance_buffer, size )?;
-
-  device.destroy_buffer( staging_buffer, None );
-  device.free_memory( staging_buffer_memory, None );
 
   Ok(())
 }

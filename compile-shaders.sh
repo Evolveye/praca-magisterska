@@ -1,2 +1,6 @@
-glslc ./src/rendering/shaders/shader.vert -o ./src/rendering/shaders/vert.spv
-glslc ./src/rendering/shaders/shader.frag -o ./src/rendering/shaders/frag.spv
+function compile {
+  glslc ./src/rendering/shaders/$1/shader.vert -o ./src/rendering/shaders/$1/vert.spv
+  glslc ./src/rendering/shaders/$1/shader.frag -o ./src/rendering/shaders/$1/frag.spv
+}
+
+compile 'instances-textured-lighted'

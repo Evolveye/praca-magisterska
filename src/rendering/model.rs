@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cgmath::{ vec2, vec3 };
+use cgmath::{ vec2, vec3, Vector3 };
 use std::{
   collections::HashMap,
   io::BufReader,
@@ -31,15 +31,15 @@ static VERTICES:[ Vertex; 8 ] = [
   // Vertex::new( vec3(  1.0,  1.0,  1.0 ), vec3( 1.0, 1.0, 1.0 ), vec2( 1.0, 1.0 ) ),
   // Vertex::new( vec3( -1.0,  1.0,  1.0 ), vec3( 0.0, 0.0, 1.0 ), vec2( 0.0, 1.0 ) ),
 
-  Vertex::new( vec3(  1.0, -1.0, -1.0 ), vec3( 0.0, 1.0, 0.0 ), vec2( 0.0, 0.0 ) ),
-  Vertex::new( vec3(  1.0, -1.0,  1.0 ), vec3( 0.0, 1.0, 0.0 ), vec2( 0.0, 0.0 ) ),
-  Vertex::new( vec3( -1.0, -1.0,  1.0 ), vec3( 1.0, 0.0, 0.0 ), vec2( 1.0, 0.0 ) ),
-  Vertex::new( vec3( -1.0, -1.0, -1.0 ), vec3( 1.0, 0.0, 0.0 ), vec2( 1.0, 0.0 ) ),
+  Vertex::new( vec3(  1.0, -1.0, -1.0 ), vec3( 0.0, 1.0, 0.0 ), vec3( 0.0, 1.0, 0.0 ), vec2( 0.0, 0.0 ) ),
+  Vertex::new( vec3(  1.0, -1.0,  1.0 ), vec3( 0.0, 1.0, 0.0 ), vec3( 0.0, 1.0, 0.0 ), vec2( 0.0, 0.0 ) ),
+  Vertex::new( vec3( -1.0, -1.0,  1.0 ), vec3( 1.0, 0.0, 0.0 ), vec3( 1.0, 0.0, 0.0 ), vec2( 1.0, 0.0 ) ),
+  Vertex::new( vec3( -1.0, -1.0, -1.0 ), vec3( 1.0, 0.0, 0.0 ), vec3( 1.0, 0.0, 0.0 ), vec2( 1.0, 0.0 ) ),
 
-  Vertex::new( vec3(  1.0,  1.0, -1.0 ), vec3( 1.0, 1.0, 1.0 ), vec2( 1.0, 1.0 ) ),
-  Vertex::new( vec3(  1.0,  1.0,  1.0 ), vec3( 1.0, 1.0, 1.0 ), vec2( 1.0, 1.0 ) ),
-  Vertex::new( vec3( -1.0,  1.0,  1.0 ), vec3( 0.0, 0.0, 1.0 ), vec2( 0.0, 1.0 ) ),
-  Vertex::new( vec3( -1.0,  1.0, -1.0 ), vec3( 0.0, 0.0, 1.0 ), vec2( 0.0, 1.0 ) ),
+  Vertex::new( vec3(  1.0,  1.0, -1.0 ), vec3( 1.0, 1.0, 1.0 ), vec3( 1.0, 1.0, 1.0 ), vec2( 1.0, 1.0 ) ),
+  Vertex::new( vec3(  1.0,  1.0,  1.0 ), vec3( 1.0, 1.0, 1.0 ), vec3( 1.0, 1.0, 1.0 ), vec2( 1.0, 1.0 ) ),
+  Vertex::new( vec3( -1.0,  1.0,  1.0 ), vec3( 0.0, 0.0, 1.0 ), vec3( 0.0, 0.0, 1.0 ), vec2( 0.0, 1.0 ) ),
+  Vertex::new( vec3( -1.0,  1.0, -1.0 ), vec3( 0.0, 0.0, 1.0 ), vec3( 0.0, 0.0, 1.0 ), vec2( 0.0, 1.0 ) ),
 ];
 
 const INDICES:&[ u32 ] = &[
@@ -64,6 +64,9 @@ pub struct Model {
   pub vertex_buffer_memory: vk::DeviceMemory,
   pub index_buffer: vk::Buffer,
   pub index_buffer_memory: vk::DeviceMemory,
+  pub instances_count: u32,
+  pub instance_buffer: vk::Buffer,
+  pub instance_buffer_memory: vk::DeviceMemory,
 }
 
 impl Model {
@@ -76,8 +79,11 @@ impl Model {
     vertices: Vec<Vertex>,
     indices: Vec<u32>
   ) -> Result<Self> {
+    let instances_count = 15;
+
     let ( index_buffer, index_buffer_memory ) = Model::create_index_buffer( instance, device, physical_device, command_pool, graphics_queue, &indices )?;
     let ( vertex_buffer, vertex_buffer_memory ) = Model::create_vertex_buffer( instance, device, physical_device, command_pool, graphics_queue, &vertices )?;
+    let ( instance_buffer, instance_buffer_memory ) = Model::create_instance_buffer( instance, device, physical_device, command_pool, graphics_queue, instances_count )?;
 
     Ok( Self {
       vertices,
@@ -86,6 +92,9 @@ impl Model {
       vertex_buffer_memory,
       index_buffer,
       index_buffer_memory,
+      instances_count,
+      instance_buffer,
+      instance_buffer_memory,
     } )
   }
 
@@ -156,6 +165,11 @@ impl Model {
               1.0 - loaded_model.mesh.texcoords[ tex_coord_offset + 1 ],
             )
           },
+          normal: vec3(
+            loaded_model.mesh.normals[ pos_offset + 0 ],
+            loaded_model.mesh.normals[ pos_offset + 1 ],
+            loaded_model.mesh.normals[ pos_offset + 2 ],
+          ),
         };
 
         if let Some( index ) = unique_vertices.get( &vertex ) {
@@ -252,20 +266,76 @@ impl Model {
     Ok(( vertex_buffer, vertex_buffer_memory ))
   }
 
+  unsafe fn create_instance_buffer(
+    instance: &Instance,
+    device: &Device,
+    physical_device: vk::PhysicalDevice,
+    command_pool: vk::CommandPool,
+    graphics_queue: vk::Queue,
+    instances_count: u32,
+  ) -> Result<( vk::Buffer, vk::DeviceMemory )> {
+    let size = (size_of::<ModelInstance>() * instances_count as usize) as u64;
+    let ( staging_buffer, staging_buffer_memory ) = create_buffer(
+      instance,
+      device,
+      physical_device,
+      size,
+      vk::BufferUsageFlags::TRANSFER_SRC,
+      vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
+    )?;
+
+    let memory = device.map_memory( staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
+
+    // TODO Instances data
+    let radius = 10.0;
+    let instances_data = (0..instances_count).map( |model_index| {
+      let theta = 2.0 * std::f32::consts::PI * (model_index as f32) / (instances_count as f32);
+      let x = radius * theta.cos();
+      let z = radius * theta.sin();
+
+      let translate = Vector3::new( x, z / 3.0, z );
+
+      ModelInstance { translate }
+    } )
+    .collect::<Vec<ModelInstance>>();
+
+    memcpy( instances_data.as_ptr(), memory.cast(), instances_count as usize );
+    device.unmap_memory( staging_buffer_memory );
+
+    let ( instance_buffer, instance_buffer_memory ) = create_buffer(
+      instance,
+      device,
+      physical_device,
+      size,
+      vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
+      vk::MemoryPropertyFlags::DEVICE_LOCAL,
+    )?;
+
+    copy_buffer( device, command_pool, graphics_queue, staging_buffer, instance_buffer, size )?;
+
+    device.destroy_buffer( staging_buffer, None );
+    device.free_memory( staging_buffer_memory, None );
+
+    Ok(( instance_buffer, instance_buffer_memory ))
+  }
+
   pub unsafe fn destroy( &self, device:&Device ) {
     device.destroy_buffer( self.vertex_buffer, None );
     device.free_memory( self.vertex_buffer_memory, None );
 
     device.destroy_buffer( self.index_buffer, None );
     device.free_memory( self.index_buffer_memory, None );
+
+    device.destroy_buffer( self.instance_buffer, None );
+    device.free_memory( self.instance_buffer_memory, None );
   }
 
   pub unsafe fn render( &self, device:&Device, command_buffer:vk::CommandBuffer ) {
     device.cmd_bind_vertex_buffers( command_buffer, 0, &[ self.vertex_buffer ], &[ 0, 0 ] );
-    // device.cmd_bind_vertex_buffers( command_buffer, 0, &[ self.data.vertex_buffer, self.data.instance_buffer ], &[ 0, 0 ] );
+    device.cmd_bind_vertex_buffers( command_buffer, 0, &[ self.vertex_buffer, self.instance_buffer ], &[ 0, 0 ] );
     device.cmd_bind_index_buffer( command_buffer, self.index_buffer, 0, vk::IndexType::UINT32 );
-    device.cmd_draw_indexed( command_buffer, self.indices.len() as u32, 1, 0, 0, 0 );
-    // device.cmd_draw_indexed( command_buffer, self.data.indices.len() as u32, self.data.instances_count, 0, 0, 0 );
+    // device.cmd_draw_indexed( command_buffer, self.indices.len() as u32, 1, 0, 0, 0 );
+    device.cmd_draw_indexed( command_buffer, self.indices.len() as u32, self.instances_count, 0, 0, 0 );
   }
 }
 
@@ -287,7 +357,7 @@ impl ModelInstance {
   pub fn attribute_description() -> [ vk::VertexInputAttributeDescription; 1 ] {
     let instance_matrix = vk::VertexInputAttributeDescription::builder()
       .binding( 1 )
-      .location( 3 )
+      .location( 4 )
       .format( vk::Format::R32G32B32_SFLOAT )
       // .format( vk::Format::R32G32B32A32_SFLOAT )
       .offset( 0 )
