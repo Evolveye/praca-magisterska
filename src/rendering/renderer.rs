@@ -178,14 +178,14 @@ impl App {
 
     create_sync_objects( &device, &mut data )?;
 
-    // // create_texture_image( &instance, &device, &mut data, "src/resources/viking_room.png" )?;
-    // data.texture = Texture::load( &instance, &device, &mut data, "src/resources/viking_room.png" )?;
-    data.texture = Texture::load( &instance, &device, &mut data, "src/resources/barrel.png" )?;
+    // // create_texture_image( &instance, &device, &mut data, "src/rendering/resources/viking_room.png" )?;
+    // data.texture = Texture::load( &instance, &device, &mut data, "src/rendering/resources/viking_room.png" )?;
+    data.texture = Texture::load( &instance, &device, &mut data, "src/rendering/resources/barrel.png" )?;
     // // load_model( &mut data, "cube" )?;
-    // // load_model( &mut data, "src/resources/cube.obj" )?;
-    // // load_model( &mut data, "src/resources/viking_room.obj" )?;
-    // // load_model( &mut data, "src/resources/bunny.obj" )?;
-    // load_model( &mut data, "src/resources/barrel.obj" )?;
+    // // load_model( &mut data, "src/rendering/resources/cube.obj" )?;
+    // // load_model( &mut data, "src/rendering/resources/viking_room.obj" )?;
+    // // load_model( &mut data, "src/rendering/resources/bunny.obj" )?;
+    // load_model( &mut data, "src/rendering/resources/barrel.obj" )?;
     // create_vertex_buffer( &instance, &device, &mut data )?;
     // create_index_buffer( &instance, &device, &mut data )?;
     // // create_instance_buffer( &instance, &device, &mut data )?;
@@ -208,21 +208,21 @@ impl App {
   pub unsafe fn load_model( &mut self, src:&str ) -> Result<()>  {
     let App { ref instance, ref device, ref mut data, .. } = self;
 
-    // create_texture_image( instance, device, data, "src/resources/viking_room.png" )?;
-    // create_texture_image( instance, device, data, "src/resources/barrel.png" )?;
+    // create_texture_image( instance, device, data, "src/rendering/resources/viking_room.png" )?;
+    // create_texture_image( instance, device, data, "src/rendering/resources/barrel.png" )?;
     // create_texture_image_view( device, data )?;
     // create_texture_sampler( device, data )?;
     // load_model( data, "cube" )?;
-    // load_model( data, "src/resources/cube.obj" )?;
-    // load_model( data, "src/resources/viking_room.obj" )?;
-    // load_model( data, "src/resources/bunny.obj" )?;
+    // load_model( data, "src/rendering/resources/cube.obj" )?;
+    // load_model( data, "src/rendering/resources/viking_room.obj" )?;
+    // load_model( data, "src/rendering/resources/bunny.obj" )?;
 
     data.model = Model::from_file(
       instance, device,
       data.physical_device, data.command_pool, data.graphics_queue,
       src,
     )?;
-    // load_model( data, "src/resources/barrel.obj" )?;
+    // load_model( data, "src/rendering/resources/barrel.obj" )?;
     // create_vertex_buffer( instance, device, data )?;
     // create_index_buffer( instance, device, data )?;
 

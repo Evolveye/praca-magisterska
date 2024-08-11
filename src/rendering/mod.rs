@@ -31,7 +31,7 @@ pub fn render() -> Result<()> {
   let mut app = unsafe { App::create( &window, |a| a )? };
   let mut minimized = false;
 
-  unsafe { app.load_model( "src/resources/barrel.obj" )?; }
+  unsafe { app.load_model( "src/rendering/resources/barrel.obj" )?; }
 
   event_loop.run( move |event, elwt| {
     match event {
