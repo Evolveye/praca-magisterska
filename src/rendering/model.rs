@@ -79,7 +79,7 @@ impl Model {
     vertices: Vec<Vertex>,
     indices: Vec<u32>
   ) -> Result<Self> {
-    let instances_count = 15;
+    let instances_count = 1;
 
     let ( index_buffer, index_buffer_memory ) = Model::create_index_buffer( instance, device, physical_device, command_pool, graphics_queue, &indices )?;
     let ( vertex_buffer, vertex_buffer_memory ) = Model::create_vertex_buffer( instance, device, physical_device, command_pool, graphics_queue, &vertices )?;
@@ -332,10 +332,12 @@ impl Model {
 
   pub unsafe fn render( &self, device:&Device, command_buffer:vk::CommandBuffer ) {
     device.cmd_bind_vertex_buffers( command_buffer, 0, &[ self.vertex_buffer ], &[ 0, 0 ] );
-    device.cmd_bind_vertex_buffers( command_buffer, 0, &[ self.vertex_buffer, self.instance_buffer ], &[ 0, 0 ] );
     device.cmd_bind_index_buffer( command_buffer, self.index_buffer, 0, vk::IndexType::UINT32 );
-    // device.cmd_draw_indexed( command_buffer, self.indices.len() as u32, 1, 0, 0, 0 );
-    device.cmd_draw_indexed( command_buffer, self.indices.len() as u32, self.instances_count, 0, 0, 0 );
+    device.cmd_draw_indexed( command_buffer, self.indices.len() as u32, 1, 0, 0, 0 );
+
+    // pub unsafe fn render( &self, device:&Device, command_buffer:vk::CommandBuffer ) {
+    // device.cmd_bind_vertex_buffers( command_buffer, 0, &[ self.vertex_buffer, self.instance_buffer ], &[ 0, 0 ] );
+    // device.cmd_draw_indexed( command_buffer, self.indices.len() as u32, self.instances_count, 0, 0, 0 );
   }
 }
 

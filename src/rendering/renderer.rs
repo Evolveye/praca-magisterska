@@ -325,6 +325,23 @@ impl App {
 
 
   pub unsafe fn render( &mut self, window:&Window) -> Result<()> {
+    let timestamp = Instant::now();
+    let time_delta = timestamp.duration_since( self.last_tick_time );
+
+    self.last_tick_time = timestamp;
+    self.fps_count += 1;
+
+    if self.fps_time.elapsed() >= Duration::from_secs( 1 ) {
+      let fps = 1.0 / time_delta.as_secs_f64();
+      println!( "fps={}", self.fps_count );
+
+      self.fps_time = timestamp;
+      self.fps_count = 0
+    }
+
+
+    // drawing
+
     self.device.wait_for_fences( &[ self.data.in_flight_fences[ self.frame ] ], true, u64::MAX )?;
 
     let result = self.device.acquire_next_image_khr(
@@ -346,8 +363,8 @@ impl App {
 
     self.data.images_in_flight[ image_index ] = self.data.in_flight_fences[ self.frame ];
 
-    self.update_command_buffer( image_index )?;
-    self.update_uniform_buffer( image_index )?;
+    self.update_command_buffer( image_index, time_delta )?;
+    self.update_uniform_buffer( image_index, time_delta )?;
 
     let wait_semaphores = &[ self.data.image_available_semaphores[ self.frame ] ];
     let wait_stages = &[ vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT ];
@@ -388,7 +405,7 @@ impl App {
     Ok(())
   }
 
-  unsafe fn update_uniform_buffer( &mut self, image_index:usize ) -> Result<()> {
+  unsafe fn update_uniform_buffer( &mut self, image_index:usize, time_delta:Duration ) -> Result<()> {
     // let view = Mat4::look_at_rh(
     //   point3( 0.0, 0.0, 6.0 ),
     //   point3( 0.0, 0.0, 0.0 ),
@@ -399,21 +416,6 @@ impl App {
     // self.control_manager.update_target_position_by_mouse();
 
     // let view = Mat4::look_at_rh( self.control_manager.position, self.control_manager.target_position, Vec3::unit_y() );
-
-    let frame_duration = Duration::from_secs_f64( (1 / 60) as f64 );
-    let timestamp = Instant::now();
-
-    let time_delta = timestamp.duration_since( self.last_tick_time );
-    self.last_tick_time = timestamp;
-
-    self.fps_count += 1;
-    if self.fps_time.elapsed() >= Duration::from_secs( 1 ) {
-      let fps = 1.0 / time_delta.as_secs_f64();
-      println!( "fps={}", self.fps_count );
-
-      self.fps_time = timestamp;
-      self.fps_count = 0
-    }
 
     self.control_manager.update( &self.settings, time_delta.as_secs_f32() );
 
@@ -448,7 +450,7 @@ impl App {
     Ok(())
   }
 
-  unsafe fn update_command_buffer( &mut self, image_index:usize ) -> Result<()> {
+  unsafe fn update_command_buffer( &mut self, image_index:usize, time_delta:Duration ) -> Result<()> {
     let command_pool = self.data.command_pools[ image_index ];
     self.device.reset_command_pool( command_pool, vk::CommandPoolResetFlags::empty() )?;
 
