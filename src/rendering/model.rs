@@ -31,15 +31,15 @@ static VERTICES:[ Vertex; 8 ] = [
   // Vertex::new( vec3(  1.0,  1.0,  1.0 ), vec3( 1.0, 1.0, 1.0 ), vec2( 1.0, 1.0 ) ),
   // Vertex::new( vec3( -1.0,  1.0,  1.0 ), vec3( 0.0, 0.0, 1.0 ), vec2( 0.0, 1.0 ) ),
 
-  Vertex::new( vec3(  1.0, -1.0, -1.0 ), vec3( 0.0, 1.0, 0.0 ), vec3( 0.0, 1.0, 0.0 ), vec2( 0.0, 0.0 ) ),
-  Vertex::new( vec3(  1.0, -1.0,  1.0 ), vec3( 0.0, 1.0, 0.0 ), vec3( 0.0, 1.0, 0.0 ), vec2( 0.0, 0.0 ) ),
-  Vertex::new( vec3( -1.0, -1.0,  1.0 ), vec3( 1.0, 0.0, 0.0 ), vec3( 1.0, 0.0, 0.0 ), vec2( 1.0, 0.0 ) ),
-  Vertex::new( vec3( -1.0, -1.0, -1.0 ), vec3( 1.0, 0.0, 0.0 ), vec3( 1.0, 0.0, 0.0 ), vec2( 1.0, 0.0 ) ),
+  Vertex::new( vec3(  1.0, -1.0, -1.0 ), vec3( 1.0, 1.0, 1.0 ), vec3(  1.0, -1.0, -1.0 ), vec2( 1.0, 1.0 ) ),
+  Vertex::new( vec3(  1.0, -1.0,  1.0 ), vec3( 1.0, 1.0, 1.0 ), vec3(  1.0, -1.0,  1.0 ), vec2( 1.0, 1.0 ) ),
+  Vertex::new( vec3( -1.0, -1.0,  1.0 ), vec3( 1.0, 1.0, 1.0 ), vec3( -1.0, -1.0,  1.0 ), vec2( 0.0, 1.0 ) ),
+  Vertex::new( vec3( -1.0, -1.0, -1.0 ), vec3( 1.0, 1.0, 1.0 ), vec3( -1.0, -1.0, -1.0 ), vec2( 0.0, 1.0 ) ),
 
-  Vertex::new( vec3(  1.0,  1.0, -1.0 ), vec3( 1.0, 1.0, 1.0 ), vec3( 1.0, 1.0, 1.0 ), vec2( 1.0, 1.0 ) ),
-  Vertex::new( vec3(  1.0,  1.0,  1.0 ), vec3( 1.0, 1.0, 1.0 ), vec3( 1.0, 1.0, 1.0 ), vec2( 1.0, 1.0 ) ),
-  Vertex::new( vec3( -1.0,  1.0,  1.0 ), vec3( 0.0, 0.0, 1.0 ), vec3( 0.0, 0.0, 1.0 ), vec2( 0.0, 1.0 ) ),
-  Vertex::new( vec3( -1.0,  1.0, -1.0 ), vec3( 0.0, 0.0, 1.0 ), vec3( 0.0, 0.0, 1.0 ), vec2( 0.0, 1.0 ) ),
+  Vertex::new( vec3(  1.0,  1.0, -1.0 ), vec3( 1.0, 1.0, 1.0 ), vec3(  1.0,  1.0, -1.0 ), vec2( 1.0, 0.0 ) ),
+  Vertex::new( vec3(  1.0,  1.0,  1.0 ), vec3( 1.0, 1.0, 1.0 ), vec3(  1.0,  1.0,  1.0 ), vec2( 1.0, 0.0 ) ),
+  Vertex::new( vec3( -1.0,  1.0,  1.0 ), vec3( 1.0, 1.0, 1.0 ), vec3( -1.0,  1.0,  1.0 ), vec2( 0.0, 0.0 ) ),
+  Vertex::new( vec3( -1.0,  1.0, -1.0 ), vec3( 1.0, 1.0, 1.0 ), vec3( -1.0,  1.0, -1.0 ), vec2( 0.0, 0.0 ) ),
 ];
 
 const INDICES:&[ u32 ] = &[
@@ -104,8 +104,6 @@ impl Model {
     physical_device: vk::PhysicalDevice,
     command_pool: vk::CommandPool,
     graphics_queue: vk::Queue,
-    vertices: Vec<Vertex>,
-    indices: Vec<u32>
   ) -> Result<Self> {
     Model::new(instance, device, physical_device, command_pool, graphics_queue, VERTICES.to_vec(), INDICES.to_vec() )
   }

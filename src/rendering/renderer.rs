@@ -180,7 +180,6 @@ impl App {
 
     // // create_texture_image( &instance, &device, &mut data, "src/rendering/resources/viking_room.png" )?;
     // data.texture = Texture::load( &instance, &device, &mut data, "src/rendering/resources/viking_room.png" )?;
-    data.texture = Texture::load( &instance, &device, &mut data, "src/rendering/resources/barrel.png" )?;
     // // load_model( &mut data, "cube" )?;
     // // load_model( &mut data, "src/rendering/resources/cube.obj" )?;
     // // load_model( &mut data, "src/rendering/resources/viking_room.obj" )?;
@@ -205,7 +204,25 @@ impl App {
     } )
   }
 
-  pub unsafe fn load_model( &mut self, src:&str ) -> Result<()>  {
+  pub unsafe fn load_cube( &mut self ) -> Result<()> {
+    let App { ref instance, ref device, ref mut data, .. } = self;
+
+    data.model = Model::new_cube( instance, device, data.physical_device, data.command_pool, data.graphics_queue )?;
+    data.texture = Texture::load( &instance, &device, data, "src/rendering/resources/uv_map.png" )?;
+
+    Ok(())
+  }
+
+  pub unsafe fn load_model_with_texture( &mut self, model:Model, texture:Texture ) -> Result<()> {
+    let App { ref mut data, .. } = self;
+
+    data.model = model;
+    data.texture = texture;
+
+    Ok(())
+  }
+
+  pub unsafe fn load_model_from_sources( &mut self, model_src:&str, texture_src:&str ) -> Result<()> {
     let App { ref instance, ref device, ref mut data, .. } = self;
 
     // create_texture_image( instance, device, data, "src/rendering/resources/viking_room.png" )?;
@@ -220,8 +237,10 @@ impl App {
     data.model = Model::from_file(
       instance, device,
       data.physical_device, data.command_pool, data.graphics_queue,
-      src,
+      model_src,
     )?;
+
+    data.texture = Texture::load( &instance, &device, data, texture_src )?;
     // load_model( data, "src/rendering/resources/barrel.obj" )?;
     // create_vertex_buffer( instance, device, data )?;
     // create_index_buffer( instance, device, data )?;

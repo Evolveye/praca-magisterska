@@ -4,7 +4,10 @@ mod rendering;
 // use std::io;
 
 fn main() {
-    let _ = rendering::render();
+    let mut renderer = rendering::Renderer::new().unwrap();
+    renderer.load_cube();
+    // renderer.load_model_from_sources( "src/rendering/resources/barrel.obj", "src/rendering/resources/barrel.png" );
+    renderer.start_event_loop();
 
     // let fragment = world::visible_fragment::VisibleFragment::new();
 
