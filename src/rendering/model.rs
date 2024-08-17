@@ -13,9 +13,7 @@ use vulkanalia::{
 };
 
 use super::vertex::Vertex;
-use super::renderer::{
-  create_buffer, copy_buffer
-};
+use super::buffer::{ create_buffer, copy_buffer };
 
 type Mat4 = cgmath::Matrix4<f32>;
 type Vec3 = cgmath::Vector3<f32>;

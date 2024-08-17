@@ -5,8 +5,8 @@ use std::{
   ptr::copy_nonoverlapping as memcpy
 };
 
-use super::renderer::{
-  AppData,
+use super::renderer::AppData;
+use super::buffer::{
   create_buffer, begin_single_time_commands, end_single_time_commands,
   create_image, create_image_view, transition_image_layout, copy_buffer_to_image,
 };

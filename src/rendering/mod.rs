@@ -2,6 +2,8 @@ mod model;
 mod vertex;
 mod renderer;
 mod texture;
+mod buffer;
+mod pipeline;
 
 use anyhow::Result;
 
