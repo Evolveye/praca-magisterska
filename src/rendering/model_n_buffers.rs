@@ -15,43 +15,10 @@ use vulkanalia::{
 use super::vertex::Vertex;
 use super::buffer::{ create_buffer, copy_buffer };
 
+type Mat4 = cgmath::Matrix4<f32>;
 type Vec3 = cgmath::Vector3<f32>;
 
-static VERTICES:[ Vertex; 8 ] = [
-  // Vertex::new( vec3( -1.0, -1.0, -1.0 ), vec3( 1.0, 0.0, 0.0 ), vec2( 1.0, 0.0 ) ),
-  // Vertex::new( vec3(  1.0, -1.0, -1.0 ), vec3( 0.0, 1.0, 0.0 ), vec2( 0.0, 0.0 ) ),
-  // Vertex::new( vec3(  1.0, -1.0,  1.0 ), vec3( 0.0, 1.0, 0.0 ), vec2( 0.0, 0.0 ) ),
-  // Vertex::new( vec3( -1.0, -1.0,  1.0 ), vec3( 1.0, 0.0, 0.0 ), vec2( 1.0, 0.0 ) ),
 
-  // Vertex::new( vec3( -1.0,  1.0, -1.0 ), vec3( 0.0, 0.0, 1.0 ), vec2( 0.0, 1.0 ) ),
-  // Vertex::new( vec3(  1.0,  1.0, -1.0 ), vec3( 1.0, 1.0, 1.0 ), vec2( 1.0, 1.0 ) ),
-  // Vertex::new( vec3(  1.0,  1.0,  1.0 ), vec3( 1.0, 1.0, 1.0 ), vec2( 1.0, 1.0 ) ),
-  // Vertex::new( vec3( -1.0,  1.0,  1.0 ), vec3( 0.0, 0.0, 1.0 ), vec2( 0.0, 1.0 ) ),
-
-  Vertex::new( vec3(  1.0,  0.0,  0.0 ), vec3( 1.0, 1.0, 1.0 ), vec3(  1.0, -1.0, -1.0 ), vec2( 1.0, 1.0 ) ),
-  Vertex::new( vec3(  1.0,  0.0,  1.0 ), vec3( 1.0, 1.0, 1.0 ), vec3(  1.0, -1.0,  1.0 ), vec2( 1.0, 1.0 ) ),
-  Vertex::new( vec3(  0.0,  0.0,  1.0 ), vec3( 1.0, 1.0, 1.0 ), vec3( -1.0, -1.0,  1.0 ), vec2( 0.0, 1.0 ) ),
-  Vertex::new( vec3(  0.0,  0.0,  0.0 ), vec3( 1.0, 1.0, 1.0 ), vec3( -1.0, -1.0, -1.0 ), vec2( 0.0, 1.0 ) ),
-
-  Vertex::new( vec3(  1.0,  1.0,  0.0 ), vec3( 1.0, 1.0, 1.0 ), vec3(  1.0,  1.0, -1.0 ), vec2( 1.0, 0.0 ) ),
-  Vertex::new( vec3(  1.0,  1.0,  1.0 ), vec3( 1.0, 1.0, 1.0 ), vec3(  1.0,  1.0,  1.0 ), vec2( 1.0, 0.0 ) ),
-  Vertex::new( vec3(  0.0,  1.0,  1.0 ), vec3( 1.0, 1.0, 1.0 ), vec3( -1.0,  1.0,  1.0 ), vec2( 0.0, 0.0 ) ),
-  Vertex::new( vec3(  0.0,  1.0,  0.0 ), vec3( 1.0, 1.0, 1.0 ), vec3( -1.0,  1.0, -1.0 ), vec2( 0.0, 0.0 ) ),
-];
-
-const INDICES:&[ u32 ] = &[
-  1, 2, 0, 2, 3, 0, // bottom
-  5, 4, 6, 4, 7, 6, // up
-  1, 0, 5, 0, 4, 5, // back
-  0, 3, 4, 3, 7, 4, // left
-  3, 2, 7, 2, 6, 7, // front
-  2, 1, 6, 1, 5, 6, // right
-
-  // 1, 2, 3,
-  // 7, 6, 5,
-  // 4, 5, 1,
-  // 5, 6, 2,
-];
 
 #[derive(Clone, Debug, Default)]
 pub struct Model {
@@ -93,20 +60,6 @@ impl Model {
       instance_buffer,
       instance_buffer_memory,
     } )
-  }
-
-  pub unsafe fn new_cube(
-    instance: &Instance,
-    device: &Device,
-    physical_device: vk::PhysicalDevice,
-    command_pool: vk::CommandPool,
-    graphics_queue: vk::Queue,
-  ) -> Result<Self> {
-    Model::new(
-      instance, device, physical_device, command_pool, graphics_queue,
-      VERTICES.to_vec(),
-      INDICES.to_vec(),
-    )
   }
 
   pub unsafe fn from_file(

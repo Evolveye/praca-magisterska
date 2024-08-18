@@ -1,13 +1,17 @@
-// mod world;
+mod simulation;
 mod rendering;
+mod world;
+mod window_manager;
 
-// use std::io;
+use simulation::Simulation;
 
 fn main() {
-    let mut renderer = rendering::Renderer::new().unwrap();
-    renderer.load_cube();
+    let mut simulation = Simulation::new().unwrap();
+    simulation.run_window_event_loop();
+    // let mut renderer = rendering::Renderer::new().unwrap();
+    // world.render();
+    // renderer.load_cube();
     // renderer.load_model_from_sources( "src/rendering/resources/barrel.obj", "src/rendering/resources/barrel.png" );
-    renderer.start_event_loop();
 
     // let fragment = world::visible_fragment::VisibleFragment::new();
 

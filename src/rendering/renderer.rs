@@ -28,6 +28,8 @@ use std::ptr::copy_nonoverlapping as memcpy;
 use std::time::{ Instant, Duration };
 use std::f32::consts::PI;
 
+use crate::window_manager::WindowManager;
+
 use super::model::Model;
 use super::buffer::*;
 use super::pipeline::create_pipeline_for_model;
@@ -35,6 +37,7 @@ use super::texture::Texture;
 
 type Vec3 = cgmath::Vector3<f32>;
 type Mat4 = cgmath::Matrix4<f32>;
+pub type ModelRegistrar = fn(usize) -> Result<Vec<vk::CommandBuffer>>;
 
 const PORTABILITY_MACOS_VERSION:Version = Version::new( 1, 3, 216 );
 const VALIDATION_ENABLED:bool = cfg!( debug_assertions );
@@ -43,113 +46,20 @@ const DEVICE_EXTENSIONS:&[ vk::ExtensionName ] = &[ vk::KHR_SWAPCHAIN_EXTENSION.
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
 const INSTANCED_RENDERING:bool = false;
 
-#[derive(Clone, Debug)]
-pub struct ControlManager {
-  pub position: Point3<f32>,
-  pub velocity_left: f32,
-  pub velocity_right: f32,
-  pub velocity_up: f32,
-  pub velocity_down: f32,
-  pub velocity_forward: f32,
-  pub velocity_backward: f32,
-  pub rotation: cgmath::Vector2<f32>,
-  pub mouse_position: Point2<f32>,
-  pub mouse_last_used_position: Point2<f32>,
-  pub lmb_pressed: bool,
-}
-
-impl ControlManager {
-  fn new( position:Point3<f32>, target:Point3<f32>) -> Self {
-    let direction = (target - position).normalize();
-    let pitch = direction.y.asin();
-    let yaw = direction.z.atan2( direction.x );
-
-    Self {
-      position,
-      velocity_right: 0.0,
-      velocity_left: 0.0,
-      velocity_up: 0.0,
-      velocity_down: 0.0,
-      velocity_forward: 0.0,
-      velocity_backward: 0.0,
-      rotation: vec2( pitch, yaw ),
-      mouse_position: point2( 0.0, 0.0 ),
-      mouse_last_used_position: point2( 0.0, 0.0 ),
-      lmb_pressed: false
-    }
-  }
-
-  fn update_rotation( &mut self, settings:&AppSettings, delta_time:f32 ) {
-    if self.lmb_pressed {
-      self.rotation.x += (self.mouse_position.y - self.mouse_last_used_position.y) * -settings.rotation_sensitivity * delta_time;
-      self.rotation.y += (self.mouse_position.x - self.mouse_last_used_position.x) *  settings.rotation_sensitivity * delta_time;
-    }
-  }
-
-  fn update( &mut self, settings:&AppSettings, delta_time:f32 ) {
-    self.update_rotation( settings, delta_time );
-
-    let speed = settings.movement_speed;
-    let front = Vector3::new( self.rotation.y.cos(), 0.0, self.rotation.y.sin() ).normalize();
-    let right = Vector3::new( front.z, 0.0, -front.x );
-
-    self.position += front * (self.velocity_forward - self.velocity_backward) * speed * delta_time;
-    self.position += right * -(self.velocity_right - self.velocity_left) * speed * delta_time;
-
-    self.position.y += (self.velocity_up - self.velocity_down) * speed * delta_time;
-  }
-
-  fn get_view_matrix( &self ) -> Mat4 {
-    Mat4::look_at_rh(
-      self.position,
-      self.position + vec3(
-        self.rotation.y.cos() * self.rotation.x.cos(),
-        self.rotation.x.sin(),
-        self.rotation.y.sin() * self.rotation.x.cos(),
-      ),
-      Vec3::unit_y(),
-    )
-  }
-}
-
 
 #[derive(Clone, Debug)]
-pub struct AppSettings {
-  pub rotation_sensitivity: f32,
-  pub movement_speed: f32,
-}
-
-impl AppSettings {
-  fn new() -> Self {
-    Self {
-      rotation_sensitivity: 0.004,
-      movement_speed: 3.0,
-    }
-  }
-}
-
-
-#[derive(Clone, Debug)]
-pub struct App {
+pub struct Renderer {
   pub models: usize,
   pub entry: Entry,
   pub instance: Instance,
   pub data: AppData,
   pub device: Device,
   pub frame: usize,
-  pub resized: bool,
-  pub start_time: Instant,
-  pub last_tick_time: Instant,
-  pub focused: bool,
-  pub settings: AppSettings,
-  pub fps_time: Instant,
-  pub fps_count: u32,
-  pub geometry_generator: fn(i32) -> i32,
-  pub control_manager: ControlManager,
+  pub model_registrars: Vec<ModelRegistrar>,
 }
 
-impl App {
-  pub unsafe fn create( window:&Window, geometry_generator:fn(i32) -> i32 ) -> Result<Self> {
+impl Renderer {
+  pub unsafe fn create( window:&Window ) -> Result<Self> {
     let loader = LibloadingLoader::new( LIBRARY )?;
     let entry = Entry::new( loader ).map_err( |b| anyhow!( "{}", b ) )?;
     let mut data = AppData::default();
@@ -190,22 +100,20 @@ impl App {
     // // create_instance_buffer( &instance, &device, &mut data )?;
 
     Ok( Self {
-      entry, instance, data, device, geometry_generator,
+      entry, instance, data, device,
       models: 1,
       frame: 0,
-      resized: false,
-      focused: true,
-      start_time: Instant::now(),
-      last_tick_time: Instant::now(),
-      fps_time: Instant::now(),
-      fps_count: 0,
-      control_manager: ControlManager::new( point3( 0.0, 20.0, -35.0 ), point3( 0.0, 0.0, -8.0 ) ),
-      settings: AppSettings::new(),
+      model_registrars: Vec::new(),
     } )
   }
 
+  pub fn register_model( &mut self, registrar:ModelRegistrar ) {
+    self.model_registrars.push( registrar )
+  }
+
+
   pub unsafe fn load_cube( &mut self ) -> Result<()> {
-    let App { ref instance, ref device, ref mut data, .. } = self;
+    let Renderer { ref instance, ref device, ref mut data, .. } = self;
 
     data.model = Model::new_cube( instance, device, data.physical_device, data.command_pool, data.graphics_queue )?;
     data.texture = Texture::load( &instance, &device, data, "src/rendering/resources/uv_map.png" )?;
@@ -214,7 +122,7 @@ impl App {
   }
 
   pub unsafe fn load_model_with_texture( &mut self, model:Model, texture:Texture ) -> Result<()> {
-    let App { ref mut data, .. } = self;
+    let Renderer { ref mut data, .. } = self;
 
     data.model = model;
     data.texture = texture;
@@ -223,7 +131,7 @@ impl App {
   }
 
   pub unsafe fn load_model_from_sources( &mut self, model_src:&str, texture_src:&str ) -> Result<()> {
-    let App { ref instance, ref device, ref mut data, .. } = self;
+    let Renderer { ref instance, ref device, ref mut data, .. } = self;
 
     // create_texture_image( instance, device, data, "src/rendering/resources/viking_room.png" )?;
     // create_texture_image( instance, device, data, "src/rendering/resources/barrel.png" )?;
@@ -343,24 +251,7 @@ impl App {
 
 
 
-  pub unsafe fn render( &mut self, window:&Window) -> Result<()> {
-    let timestamp = Instant::now();
-    let time_delta = timestamp.duration_since( self.last_tick_time );
-
-    self.last_tick_time = timestamp;
-    self.fps_count += 1;
-
-    if self.fps_time.elapsed() >= Duration::from_secs( 1 ) {
-      let fps = 1.0 / time_delta.as_secs_f64();
-      println!( "fps={}", self.fps_count );
-
-      self.fps_time = timestamp;
-      self.fps_count = 0
-    }
-
-
-    // drawing
-
+  pub unsafe fn render( &mut self, window_manager:&mut WindowManager, view_matrix:Mat4 ) -> Result<()> {
     self.device.wait_for_fences( &[ self.data.in_flight_fences[ self.frame ] ], true, u64::MAX )?;
 
     let result = self.device.acquire_next_image_khr(
@@ -372,7 +263,7 @@ impl App {
 
     let image_index = match result {
       Ok(( image_index, _ )) => image_index as usize,
-      Err( vk::ErrorCode::OUT_OF_DATE_KHR ) => return self.recreate_swapchain( window ),
+      Err( vk::ErrorCode::OUT_OF_DATE_KHR ) => return self.recreate_swapchain( &window_manager.window ),
       Err( e ) => return Err( anyhow!( e ) ),
     };
 
@@ -382,8 +273,8 @@ impl App {
 
     self.data.images_in_flight[ image_index ] = self.data.in_flight_fences[ self.frame ];
 
-    self.update_command_buffer( image_index, time_delta )?;
-    self.update_uniform_buffer( image_index, time_delta )?;
+    self.update_command_buffer( image_index )?;
+    self.update_uniform_buffer( image_index, view_matrix )?;
 
     let wait_semaphores = &[ self.data.image_available_semaphores[ self.frame ] ];
     let wait_stages = &[ vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT ];
@@ -412,9 +303,9 @@ impl App {
     let result = self.device.queue_present_khr( self.data.present_queue, &present_info );
     let changed = result == Ok( vk::SuccessCode::SUBOPTIMAL_KHR ) || result == Err( vk::ErrorCode::OUT_OF_DATE_KHR );
 
-    if self.resized || changed {
-      self.resized = false;
-      self.recreate_swapchain( window )?;
+    if window_manager.resized || changed {
+      window_manager.resized = false;
+      self.recreate_swapchain( &window_manager.window )?;
     } else if let Err( e ) = result {
       return Err( anyhow!( e ) );
     }
@@ -424,7 +315,7 @@ impl App {
     Ok(())
   }
 
-  unsafe fn update_uniform_buffer( &mut self, image_index:usize, time_delta:Duration ) -> Result<()> {
+  unsafe fn update_uniform_buffer( &mut self, image_index:usize, view_matrix:Mat4 ) -> Result<()> {
     // let view = Mat4::look_at_rh(
     //   point3( 0.0, 0.0, 6.0 ),
     //   point3( 0.0, 0.0, 0.0 ),
@@ -436,9 +327,6 @@ impl App {
 
     // let view = Mat4::look_at_rh( self.control_manager.position, self.control_manager.target_position, Vec3::unit_y() );
 
-    self.control_manager.update( &self.settings, time_delta.as_secs_f32() );
-
-    let view = self.control_manager.get_view_matrix();
     let correction = Mat4::new(
       1.0,  0.0,       0.0, 0.0,
       0.0, -1.0,       0.0, 0.0,
@@ -453,7 +341,7 @@ impl App {
       100.0,
     );
 
-    let ubo = UniformBufferObject { view, proj };
+    let ubo = UniformBufferObject { view:view_matrix, proj };
 
     let memory = self.device.map_memory(
       self.data.uniform_buffers_memory[ image_index ],
@@ -469,7 +357,7 @@ impl App {
     Ok(())
   }
 
-  unsafe fn update_command_buffer( &mut self, image_index:usize, time_delta:Duration ) -> Result<()> {
+  unsafe fn update_command_buffer( &mut self, image_index:usize ) -> Result<()> {
     let command_pool = self.data.command_pools[ image_index ];
     self.device.reset_command_pool( command_pool, vk::CommandPoolResetFlags::empty() )?;
 
@@ -506,8 +394,31 @@ impl App {
 
     self.device.cmd_begin_render_pass( command_buffer, &render_pass_begin, vk::SubpassContents::SECONDARY_COMMAND_BUFFERS );
 
+    // let secondary_command_buffers = self.model_registrars.iter()
+    //   .flat_map( |registrar| -> Vec<vk::CommandBuffer> {
+    //     let buffers = registrar( image_index );
+    //     Vec::new()
+    //   } )
+    //   .collect::<Vec<_>>();
+
     let secondary_command_buffers = (0..if INSTANCED_RENDERING { self.models } else { self.data.instances_count })
-      .map( |i| self.update_secondary_command_buffer( image_index, i ) )
+      .map( |model_index| {
+        let command_buffers = &mut self.data.secondary_command_buffers[ image_index ];
+
+        while model_index >= command_buffers.len() {
+          let allocate_info = vk::CommandBufferAllocateInfo::builder()
+            .command_pool( self.data.command_pools[ image_index ] )
+            .level( vk::CommandBufferLevel::SECONDARY )
+            .command_buffer_count( 1 );
+
+          let command_buffer = self.device.allocate_command_buffers( &allocate_info )?[ 0 ];
+          command_buffers.push( command_buffer );
+        }
+
+        let command_buffer = command_buffers[ model_index ];
+
+        self.update_secondary_command_buffer( image_index, model_index, command_buffer )
+      } )
       .collect::<Result<Vec<_>, _>>()?;
 
     self.device.cmd_execute_commands( command_buffer, &secondary_command_buffers );
@@ -517,62 +428,7 @@ impl App {
     Ok(())
   }
 
-  unsafe fn update_secondary_command_buffer( &mut self, image_index:usize, model_index:usize) -> Result<vk::CommandBuffer> {
-    // self.data.secondary_command_buffers.resize_with( image_index + 1, Vec::new );
-
-    let command_buffers = &mut self.data.secondary_command_buffers[ image_index ];
-
-    while model_index >= command_buffers.len() {
-      let allocate_info = vk::CommandBufferAllocateInfo::builder()
-        .command_pool( self.data.command_pools[ image_index ] )
-        .level( vk::CommandBufferLevel::SECONDARY )
-        .command_buffer_count( 1 );
-
-      let command_buffer = self.device.allocate_command_buffers( &allocate_info )?[ 0 ];
-      command_buffers.push( command_buffer );
-    }
-
-    let command_buffer = command_buffers[ model_index ];
-
-    // Model
-
-    // TODO it have to be written ~~better~~ in correct way
-
-    let modulo_value = 10;
-    let radius = 10.0;
-
-    let theta = 2.0 * PI * (model_index as f32) / (self.data.instances_count as f32);
-    let x = radius * theta.cos();
-    let z = radius * theta.sin();
-
-    let time = self.last_tick_time.elapsed().as_secs_f32();
-
-    let model = Mat4::from_translation( vec3( x, z / 3.0, z ) );
-    // * Mat4::from_axis_angle(
-    //   vec3( 0.0, 0.0, 1.0 ),
-    //   Deg( 90.0 ) * time
-    // );
-
-    let model_bytes = std::slice::from_raw_parts(
-      &model as *const Mat4 as *const u8,
-      size_of::<Mat4>()
-    );
-
-    // let opacity = 0.2 as f32;
-    // let opacity = 1.0f32; //(model_index + 1) as f32 * 0.25;
-    // let opacity = (4 - model_index) as f32 * 0.25;
-
-    let elapsed = self.start_time.elapsed().as_secs_f32();
-    let opacity = if (elapsed as usize + model_index) % 5 == 0 {
-      ((elapsed.fract() - 0.5) * 2.0).abs()
-    } else {
-      1.0
-    };
-
-    let opacity_bytes = &opacity.to_ne_bytes()[..];
-
-    //
-
+  unsafe fn update_secondary_command_buffer( &mut self, image_index:usize, model_index:usize, command_buffer:vk::CommandBuffer) -> Result<vk::CommandBuffer> {
     let inheritance_info = vk::CommandBufferInheritanceInfo::builder()
       .render_pass( self.data.render_pass )
       .subpass( 0 )
@@ -583,7 +439,6 @@ impl App {
       .inheritance_info( &inheritance_info );
 
     self.device.begin_command_buffer( command_buffer, &info )?;
-
     self.device.cmd_bind_pipeline( command_buffer, vk::PipelineBindPoint::GRAPHICS, self.data.pipeline );
 
     self.device.cmd_bind_descriptor_sets(
@@ -595,23 +450,63 @@ impl App {
       &[]
     );
 
-    self.device.cmd_push_constants(
-      command_buffer,
-      self.data.pipeline_layout,
-      vk::ShaderStageFlags::VERTEX,
-      0,
-      model_bytes,
-    );
+    // Model
+    //TODO it have to be written ~~better~~ in correct way
+      let modulo_value = 10;
+      let radius = 10.0;
 
-    self.device.cmd_push_constants(
-      command_buffer,
-      self.data.pipeline_layout,
-      vk::ShaderStageFlags::FRAGMENT,
-      64,
-      opacity_bytes,
-    );
+      let theta = 2.0 * PI * (model_index as f32) / (self.data.instances_count as f32);
+      let x = (model_index % 3) as f32;
+      let z = (model_index / 3) as f32;
+      // let x = radius * theta.cos();
+      // let z = radius * theta.sin();
 
-    self.data.model.render( &self.device, command_buffer );
+      // let time = self.last_tick_time.elapsed().as_secs_f32();
+
+      let model = Mat4::from_translation( vec3( x, 0.0, z ) );
+      // * Mat4::from_axis_angle(
+      //   vec3( 0.0, 0.0, 1.0 ),
+      //   Deg( 90.0 ) * time
+      // );
+
+      let model_bytes = std::slice::from_raw_parts(
+        &model as *const Mat4 as *const u8,
+        size_of::<Mat4>()
+      );
+
+      // let opacity = 0.2 as f32;
+      // let opacity = 1.0f32; //(model_index + 1) as f32 * 0.25;
+      // let opacity = (4 - model_index) as f32 * 0.25;
+
+      let opacity = 1.0 as f32;
+      let elapsed = Instant::now().elapsed().as_secs_f32();
+      // let opacity = if (elapsed as usize + model_index) % 5 == 0 {
+      //   ((elapsed.fract() - 0.5) * 2.0).abs()
+      // } else {
+      //   1.0
+      // };
+
+      let opacity_bytes = &opacity.to_ne_bytes()[..];
+
+      self.device.cmd_push_constants(
+        command_buffer,
+        self.data.pipeline_layout,
+        vk::ShaderStageFlags::VERTEX,
+        0,
+        model_bytes,
+      );
+
+      self.device.cmd_push_constants(
+        command_buffer,
+        self.data.pipeline_layout,
+        vk::ShaderStageFlags::FRAGMENT,
+        64,
+        opacity_bytes,
+      );
+
+      self.data.model.render( &self.device, command_buffer );
+    //
+
     self.device.end_command_buffer( command_buffer )?;
 
     Ok( command_buffer )
