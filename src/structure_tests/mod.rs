@@ -1,7 +1,13 @@
 pub mod tester;
 pub mod voxel_map;
+pub mod voxel_list;
 
 use tester::WorldHolder;
+
+#[allow(unused_imports)]
+use voxel_list::VoxelList;
+
+#[allow(unused_imports)]
 use voxel_map::VoxelMap;
 
 pub fn run_test() {
@@ -9,12 +15,13 @@ pub fn run_test() {
     println!( "Starting tester" );
 
     let tester = tester::Tester {};
-    let mut voxel_map = VoxelMap::new();
-    let dataset = tester.fill_100( &mut voxel_map );
+    // let mut world_struct = VoxelMap::new();
+    let mut world_struct = VoxelList::new();
+    let dataset = tester.fill_1( &mut world_struct );
 
     println!( "" );
     dataset.get_size();
     println!( "" );
-    voxel_map.get_size();
+    world_struct.get_size();
     println!( "" );
 }

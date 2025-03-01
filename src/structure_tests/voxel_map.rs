@@ -8,6 +8,7 @@ pub struct VoxelMap {
 }
 
 impl VoxelMap {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             data: vec![ vec![ vec![ None; WORLD_Z as usize ]; WORLD_Y as usize ]; WORLD_X as usize ],
@@ -32,9 +33,6 @@ impl WorldHolder for VoxelMap {
         let its_size = size_of::<Self>();
         println!( " - its size = {}", its_size );
 
-        let rc_size = size_of::<Rc<Voxel>>();
-        println!( " - Reference Counting size = {}", rc_size );
-
         let root_vec_size = size_of::<Vec<Vec<Vec<Option<Rc<Voxel>>>>>>();
         println!( " - root vector size = {}", root_vec_size );
 
@@ -50,11 +48,10 @@ impl WorldHolder for VoxelMap {
         let depths_size = self.data.len() * depth_vec_size;
         let rows_size = self.data.len() * self.data[ 0 ].len() * depth_vec_size;
         let cells_size = self.data.len() * self.data[ 0 ].len() * self.data[ 0 ][ 0 ].len() * cell_size;
-        let full_size = root_vec_size + depths_size + rows_size + cells_size;
-        println!( " - full size = root + depths + rows + columns" );
-        println!( " - full size = {} + {} + {} + {} = {} = {} KiB = {} MiB = {} GiB",
-            root_vec_size, depths_size, rows_size, cells_size,
-            full_size, full_size / 1024, full_size / 1024 / 1024, full_size / 1024 / 1024 / 1024,
+        let full_size = its_size + root_vec_size + depths_size + rows_size + cells_size;
+        println!(
+            " - full size = {} [its size] + {} [root] + {} [depths] + {} [rows] + {} [columns] = {}",
+            its_size, root_vec_size, depths_size, rows_size, cells_size, self.get_bytes_with_prefixes( full_size )
         );
     }
 }
