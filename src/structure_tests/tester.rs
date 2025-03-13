@@ -1,4 +1,4 @@
-use std::{ collections::HashMap, mem::size_of, rc::Rc };
+use std::{ cmp, collections::HashMap, mem::size_of, rc::Rc };
 
 use rand::seq::IteratorRandom;
 
@@ -7,20 +7,24 @@ pub const WORLD_Z:u32 = RENDER_DISTANCE * 2 + 1;
 pub const WORLD_Y:u32 = 384;
 pub const WORLD_X:u32 = RENDER_DISTANCE * 2 + 1;
 
+#[derive(Debug)]
 pub struct Material {
     _density: u32
 }
+#[derive(Debug)]
 pub struct Color {
     pub _red: u8,
     pub _green: u8,
     pub _blue: u8,
 }
 
+#[derive(Debug)]
 pub struct CommonVoxelData {
     pub _material: Rc<Material>,
     pub _color: Rc<Color>,
 }
 
+#[derive(Debug)]
 pub struct Voxel {
     pub _individual_data: Vec<String>,
     pub _common_data: Rc<CommonVoxelData>,
@@ -164,12 +168,12 @@ impl Tester {
             _individual_data: vec![],
         }) ) ]);
 
-        for num in 0..(WORLD_Z * WORLD_Y * WORLD_X) {
+        for num in 0..cmp::min( n, WORLD_Z * WORLD_Y * WORLD_X ) {
             let (x, y, z) = self.get_3d_indices_from_n( num );
             world_holder.set_voxel( x, y, z, voxels.get( &key ).unwrap().clone() );
 
             if num == n { break }
-            if num % 1000 == 0 { println!( " num={num}" ); }
+            self.print_num( num, n );
         }
 
         let test_dataset = TestDataset { materials, colors, common_voxel_dataset, voxels };
@@ -199,7 +203,7 @@ impl Tester {
             let (x, y, z) = self.get_3d_indices_from_n( num );
             world_holder.set_voxel( x, y, z, voxels.get( &key ).unwrap().clone() );
 
-            if num % 1000 == 0 { println!( " num={num}" ); }
+            self.print_num( num, n );
         }
 
         let test_dataset = TestDataset { materials, colors, common_voxel_dataset, voxels };
@@ -213,7 +217,7 @@ impl Tester {
         let mut common_voxel_dataset = HashMap::new();
         let mut voxels:HashMap<_, Rc<Voxel>> = HashMap::new();
 
-        for num in 0..(WORLD_Z * WORLD_Y * WORLD_X) {
+        for num in 0..cmp::min( n, WORLD_Z * WORLD_Y * WORLD_X ) {
             let (x, y, z) = self.get_3d_indices_from_n( num );
             let red = (z % 255) as u8;
             let green = (y % 255) as u8;
@@ -257,13 +261,22 @@ impl Tester {
 
             world_holder.set_voxel( x, y, z, voxel.clone() );
 
-            if num == n { break }
-            if num % 1000 == 0 { println!( " num={num}" ); }
+            self.print_num( num, n );
         }
 
         let test_dataset = TestDataset { materials, colors, common_voxel_dataset, voxels };
 
         test_dataset
+    }
+
+    fn print_num( &self, num:u32, max:u32 ) {
+        if num % 20_000 == 0 {
+            println!( " num={num}" );
+
+            if num % 1_000_000 == 0 {
+                println!( "  max reminder: {max}" );
+            }
+        }
     }
 
     fn get_3d_indices_from_n( &self, n:u32 ) -> (u32, u32, u32) {
