@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use super::tester::WorldHolder;
+use super::tester::{Voxel, WorldHolder};
 
 #[derive(Debug)]
 pub enum OctreeNode<T> {
@@ -28,6 +28,69 @@ impl<T> OctreeNode<T> {
             }
         }
     }
+
+
+    fn fill_at(
+        &mut self,
+        depth: u8,
+        origin: (u32, u32, u32),
+        size: u32,
+        fill_from: (u32, u32, u32),
+        fill_to: (u32, u32, u32),
+        value: Option<Rc<T>>,
+    ) {
+        let (from_x, from_y, from_z) = fill_from;
+        let (to_x, to_y, to_z) = fill_to;
+
+        let (origin_x, origin_y, origin_z) = origin;
+        let max_x = origin_x + size - 1;
+        let max_y = origin_y + size - 1;
+        let max_z = origin_z + size - 1;
+
+        // No crossing; branch outside filling area
+        if max_x < from_x || origin_x > to_x ||
+           max_y < from_y || origin_y > to_y ||
+           max_z < from_z || origin_z > to_z {
+            return;
+        }
+
+        // Full contained branch inside filling area
+        if origin_x >= from_x && max_x <= to_x &&
+           origin_y >= from_y && max_y <= to_y &&
+           origin_z >= from_z && max_z <= to_z {
+            *self = OctreeNode::Leaf( value );
+            return;
+        }
+
+        // Deepest node reached
+        if depth == 0 {
+            *self = OctreeNode::Leaf( value );
+            return;
+        }
+
+        // Ensure "branch" on the node
+        if let OctreeNode::Leaf( existing ) = self {
+            let filled_value = existing.clone();
+            let new_branch = OctreeBranch::new_filled_by( filled_value );
+            *self = OctreeNode::Branch( Box::new( new_branch ) );
+        }
+
+        // Pass filling into the branch
+        if let OctreeNode::Branch( branch ) = self {
+            let child_size = size / 2;
+
+            for child_index in 0..8 {
+                let cx = origin_x + if (child_index >> 2) & 1 == 1 { child_size } else { 0 };
+                let cy = origin_y + if (child_index >> 1) & 1 == 1 { child_size } else { 0 };
+                let cz = origin_z + if child_index & 1 == 1 { child_size } else { 0 };
+
+                branch.children[ child_index ].fill_at( depth - 1, (cx, cy, cz), child_size, fill_from, fill_to, value.clone() );
+            }
+
+            self.try_compress();
+        }
+    }
+
 
     fn get( &self, depth:u8, x:u32, y:u32, z:u32 ) -> Option<Rc<T>> {
         match self {
@@ -171,8 +234,17 @@ impl WorldHolder for Octree<super::tester::Voxel> {
         self.get( x, y, z )
     }
 
-    fn set_voxel( &mut self, x:u32, y:u32, z:u32, voxel:Rc<super::tester::Voxel> ) {
-        self.insert( x, y, z, voxel );
+    fn set_voxel( &mut self, x:u32, y:u32, z:u32, voxel:Option<Rc<Voxel>> ) {
+        if let Some( voxel ) = voxel {
+            self.insert( x, y, z, voxel );
+        } else {
+            self.remove( x, y, z );
+        }
+    }
+
+    fn fill_voxels( &mut self, from:(u32, u32, u32), to:(u32, u32, u32), voxel:Option<Rc<Voxel>> ) {
+        let size = 1u32 << self.max_depth;
+        self.root.fill_at( self.max_depth, (0, 0, 0), size, from, to, voxel );
     }
 
     fn get_size( &self ) {

@@ -32,7 +32,10 @@ pub struct Voxel {
 
 pub trait WorldHolder {
     fn get_voxel( &self, x:u32, y:u32, z:u32 ) -> Option<Rc<Voxel>>;
-    fn set_voxel( &mut self, x:u32, y:u32, z:u32, voxel:Rc<Voxel> );
+
+    fn set_voxel( &mut self, x:u32, y:u32, z:u32, voxel:Option<Rc<Voxel>> );
+    fn fill_voxels( &mut self, from:(u32, u32, u32), to:(u32, u32, u32), voxel:Option<Rc<Voxel>> );
+
     fn get_size( &self );
     fn get_bytes_with_prefixes( &self, bytes:usize ) -> String {
       match bytes {
@@ -91,7 +94,7 @@ pub struct Tester {}
 
 impl Tester {
     #[allow(dead_code)]
-    pub fn fill_0( &self, _world_holder:&dyn WorldHolder ) -> TestDataset {
+    pub fn set_0( &self, _world_holder:&dyn WorldHolder ) -> TestDataset {
         TestDataset {
             materials: HashMap::new(),
             colors: HashMap::new(),
@@ -101,7 +104,7 @@ impl Tester {
     }
 
     #[allow(dead_code)]
-    pub fn fill_1( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    pub fn set_1( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
         let key = String::from( "default" );
         let materials = HashMap::from([ (key.clone(), Rc::new( Material { _density:100 } )) ]);
 
@@ -116,7 +119,7 @@ impl Tester {
             _individual_data: vec![],
         }) ) ]);
 
-        world_holder.set_voxel( 0, 0, 0, voxels.get( &key ).unwrap().clone() );
+        world_holder.set_voxel( 0, 0, 0, Some( voxels.get( &key ).unwrap().clone() ) );
 
         let test_dataset = TestDataset { materials, colors, common_voxel_dataset, voxels };
 
@@ -124,36 +127,46 @@ impl Tester {
     }
 
     #[allow(dead_code)]
-    pub fn fill_50( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
-        self.fill_n( WORLD_Z * WORLD_Y * WORLD_X / 2, world_holder )
+    pub fn set_50pc( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+        self.set_n( WORLD_Z * WORLD_Y * WORLD_X / 2, world_holder )
     }
 
     #[allow(dead_code)]
-    pub fn fill_50_random( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
-        self.fill_n_random( WORLD_Z * WORLD_Y * WORLD_X / 2, world_holder )
+    pub fn set_100pc( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+        self.set_n( WORLD_Z * WORLD_Y * WORLD_X, world_holder )
     }
 
     #[allow(dead_code)]
-    pub fn fill_50_diff( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
-        self.fill_n_diff( WORLD_Z * WORLD_Y * WORLD_X / 2, world_holder )
+    pub fn set_50pc_random( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+        self.set_n_random( WORLD_Z * WORLD_Y * WORLD_X / 2, world_holder )
     }
 
     #[allow(dead_code)]
-    pub fn fill_99( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
-        self.fill_n( WORLD_Z * WORLD_Y * WORLD_X - 1, world_holder )
+    pub fn set_50pc_uniques( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+        self.set_n_uniques( WORLD_Z * WORLD_Y * WORLD_X / 2, world_holder )
     }
 
     #[allow(dead_code)]
-    pub fn fill_100( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
-        self.fill_n( WORLD_Z * WORLD_Y * WORLD_X, world_holder )
+    pub fn set_99pc( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+        self.set_n( WORLD_Z * WORLD_Y * WORLD_X - 1, world_holder )
     }
 
     #[allow(dead_code)]
-    pub fn fill_100_diff( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
-        self.fill_n_diff( WORLD_Z * WORLD_Y * WORLD_X, world_holder )
+    pub fn set_100_uniques( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+        self.set_n_uniques( WORLD_Z * WORLD_Y * WORLD_X, world_holder )
     }
 
-    fn fill_n( &self, n:u32, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    #[allow(dead_code)]
+    pub fn fill_50pc( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+        self.fill( (0, 0, 0), (WORLD_Z, WORLD_Y, WORLD_X / 2), world_holder )
+    }
+
+    #[allow(dead_code)]
+    pub fn fill_100pc( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+        self.fill( (0, 0, 0), (WORLD_Z, WORLD_Y, WORLD_X), world_holder )
+    }
+
+    fn set_n( &self, n:u32, world_holder:&mut dyn WorldHolder ) -> TestDataset {
         let key = String::from( "default" );
         let materials = HashMap::from([ (key.clone(), Rc::new( Material { _density:100 } )) ]);
         let colors = HashMap::from([ (key.clone(), Rc::new( Color { _red:50, _green:100, _blue:200 } )) ]);
@@ -168,20 +181,20 @@ impl Tester {
             _individual_data: vec![],
         }) ) ]);
 
+        let voxel = voxels.get( &key ).unwrap();
+
         for num in 0..cmp::min( n, WORLD_Z * WORLD_Y * WORLD_X ) {
             let (x, y, z) = self.get_3d_indices_from_n( num );
-            world_holder.set_voxel( x, y, z, voxels.get( &key ).unwrap().clone() );
+            world_holder.set_voxel( x, y, z, Some( voxel.clone() ) );
 
             if num == n { break }
             self.print_num( num, n );
         }
 
-        let test_dataset = TestDataset { materials, colors, common_voxel_dataset, voxels };
-
-        test_dataset
+        TestDataset { materials, colors, common_voxel_dataset, voxels }
     }
 
-    fn fill_n_random( &self, n:u32, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    fn set_n_random( &self, n:u32, world_holder:&mut dyn WorldHolder ) -> TestDataset {
         let key = String::from( "default" );
         let materials = HashMap::from([ (key.clone(), Rc::new( Material { _density:100 } )) ]);
         let colors = HashMap::from([ (key.clone(), Rc::new( Color { _red:50, _green:100, _blue:200 } )) ]);
@@ -201,17 +214,15 @@ impl Tester {
 
         for num in random {
             let (x, y, z) = self.get_3d_indices_from_n( num );
-            world_holder.set_voxel( x, y, z, voxels.get( &key ).unwrap().clone() );
+            world_holder.set_voxel( x, y, z, Some( voxels.get( &key ).unwrap().clone() ) );
 
             self.print_num( num, n );
         }
 
-        let test_dataset = TestDataset { materials, colors, common_voxel_dataset, voxels };
-
-        test_dataset
+        TestDataset { materials, colors, common_voxel_dataset, voxels }
     }
 
-    fn fill_n_diff( &self, n:u32, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    fn set_n_uniques( &self, n:u32, world_holder:&mut dyn WorldHolder ) -> TestDataset {
         let mut materials = HashMap::new();
         let mut colors = HashMap::new();
         let mut common_voxel_dataset = HashMap::new();
@@ -259,21 +270,41 @@ impl Tester {
                 }
             };
 
-            world_holder.set_voxel( x, y, z, voxel.clone() );
+            world_holder.set_voxel( x, y, z, Some( voxel.clone() ) );
 
             self.print_num( num, n );
         }
 
-        let test_dataset = TestDataset { materials, colors, common_voxel_dataset, voxels };
+        TestDataset { materials, colors, common_voxel_dataset, voxels }
+    }
 
-        test_dataset
+    fn fill( &self, from:(u32, u32, u32), to:(u32, u32, u32), world_holder:&mut dyn WorldHolder ) -> TestDataset {
+        let key = String::from( "default" );
+        let materials = HashMap::from([ (key.clone(), Rc::new( Material { _density:100 } )) ]);
+        let colors = HashMap::from([ (key.clone(), Rc::new( Color { _red:50, _green:100, _blue:200 } )) ]);
+
+        let common_voxel_dataset = HashMap::from([ (key.clone(), Rc::new( CommonVoxelData {
+            _material:materials.get( &key ).unwrap().clone(),
+            _color:colors.get( &key ).unwrap().clone(),
+        } ) ) ]);
+
+        let voxels = HashMap::from([ (key.clone(), Rc::new( Voxel {
+            _common_data: common_voxel_dataset.get( &key ).unwrap().clone(),
+            _individual_data: vec![],
+        }) ) ]);
+
+        let voxel = voxels.get( &key ).unwrap();
+
+        world_holder.fill_voxels( from, to, Some( voxel.clone() ) );
+
+        TestDataset { materials, colors, common_voxel_dataset, voxels }
     }
 
     fn print_num( &self, num:u32, max:u32 ) {
-        if num % 20_000 == 0 {
+        if num % 50_000 == 0 {
             println!( " num={num}" );
 
-            if num % 1_000_000 == 0 {
+            if num % 3_000_000 == 0 {
                 println!( "  max reminder: {max}" );
             }
         }
