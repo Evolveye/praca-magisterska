@@ -1,5 +1,7 @@
 use std::{mem::size_of, rc::Rc};
 
+use crate::world::world_holder::{Voxel, WorldHolder};
+
 use super::tester::*;
 
 pub struct VoxelMap {

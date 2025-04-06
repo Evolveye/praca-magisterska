@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use super::tester::{Voxel, WorldHolder};
+use crate::world::world_holder::{Voxel, WorldHolder};
 
 #[derive(Debug)]
 pub enum OctreeNode<T> {
@@ -229,8 +229,8 @@ impl<T> Octree<T> {
     }
 }
 
-impl WorldHolder for Octree<super::tester::Voxel> {
-    fn get_voxel( &self, x:u32, y:u32, z:u32 ) -> Option<Rc<super::tester::Voxel>> {
+impl WorldHolder for Octree<Voxel> {
+    fn get_voxel( &self, x:u32, y:u32, z:u32 ) -> Option<Rc<Voxel>> {
         self.get( x, y, z )
     }
 

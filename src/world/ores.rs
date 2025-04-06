@@ -1,4 +1,4 @@
-use crate::structure_tests::tester::WorldHolder;
+use super::world_holder::WorldHolder;
 
 pub fn generate_ores( world_holder:&mut dyn WorldHolder, from:(u32, u32, u32), to:(u32, u32, u32) ) {
     // Ore::Coal.generate( world_holder );

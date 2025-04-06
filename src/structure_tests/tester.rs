@@ -1,55 +1,13 @@
-use crate::noise::simplex_noise::SimplexNoise;
-use crate::{noise::generate_simplex_noise_image, world};
-
-use crate::world::ores::generate_ores;
-use std::{ cmp, collections::HashMap, mem::size_of, rc::Rc };
+use std::{cmp, collections::HashMap, rc::Rc};
 
 use rand::seq::IteratorRandom;
+
+use crate::{noise::simplex_noise::SimplexNoise, world::world_holder::{Color, CommonVoxelData, Material, Voxel, WorldHolder}};
 
 pub const RENDER_DISTANCE:u32 = 32 * 16;
 pub const WORLD_Z:u32 = RENDER_DISTANCE * 2 + 1;
 pub const WORLD_Y:u32 = 384;
 pub const WORLD_X:u32 = RENDER_DISTANCE * 2 + 1;
-
-#[derive(Debug)]
-pub struct Material {
-    _density: u32
-}
-#[derive(Debug)]
-pub struct Color {
-    pub _red: u8,
-    pub _green: u8,
-    pub _blue: u8,
-}
-
-#[derive(Debug)]
-pub struct CommonVoxelData {
-    pub _material: Rc<Material>,
-    pub _color: Rc<Color>,
-}
-
-#[derive(Debug)]
-pub struct Voxel {
-    pub _individual_data: Vec<String>,
-    pub _common_data: Rc<CommonVoxelData>,
-}
-
-pub trait WorldHolder {
-    fn get_voxel( &self, x:u32, y:u32, z:u32 ) -> Option<Rc<Voxel>>;
-
-    fn set_voxel( &mut self, x:u32, y:u32, z:u32, voxel:Option<Rc<Voxel>> );
-    fn fill_voxels( &mut self, from:(u32, u32, u32), to:(u32, u32, u32), voxel:Option<Rc<Voxel>> );
-
-    fn get_size( &self );
-    fn get_bytes_with_prefixes( &self, bytes:usize ) -> String {
-      match bytes {
-        size if size / 1024 / 1024 / 1024 > 0 => format!( "{size} B = {} KiB = {} MiB = {} GiB", size / 1024, size / 1024 / 1024, size / 1024 / 1024 / 1024 ),
-        size if size / 1024 / 1024 > 0 => format!( "{size} B = {} KiB = {} MiB", size / 1024, size / 1024 / 1024 ),
-        size if size / 1024 > 0 => format!( "{size} B = {} KiB", size / 1024 ),
-        size => format!( "{size} B" ),
-      }
-    }
-}
 
 pub struct TestDataset {
     pub materials: HashMap<String, Rc<Material>>,
@@ -98,7 +56,7 @@ pub struct Tester {}
 
 impl Tester {
     #[allow(dead_code)]
-    pub fn set_0( &self, _world_holder:&dyn WorldHolder ) -> TestDataset {
+    pub fn set_0( _world_holder:&dyn WorldHolder ) -> TestDataset {
         TestDataset {
             materials: HashMap::new(),
             colors: HashMap::new(),
@@ -108,7 +66,7 @@ impl Tester {
     }
 
     #[allow(dead_code)]
-    pub fn set_1( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    pub fn set_1( world_holder:&mut dyn WorldHolder ) -> TestDataset {
         let key = String::from( "default" );
         let materials = HashMap::from([ (key.clone(), Rc::new( Material { _density:100 } )) ]);
 
@@ -131,43 +89,43 @@ impl Tester {
     }
 
     #[allow(dead_code)]
-    pub fn set_50pc( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
-        self.set_n( WORLD_Z * WORLD_Y * WORLD_X / 2, world_holder )
+    pub fn set_50pc( world_holder:&mut dyn WorldHolder ) -> TestDataset {
+        Self::set_n( WORLD_Z * WORLD_Y * WORLD_X / 2, world_holder )
     }
 
     #[allow(dead_code)]
-    pub fn set_100pc( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
-        self.set_n( WORLD_Z * WORLD_Y * WORLD_X, world_holder )
+    pub fn set_100pc( world_holder:&mut dyn WorldHolder ) -> TestDataset {
+        Self::set_n( WORLD_Z * WORLD_Y * WORLD_X, world_holder )
     }
 
     #[allow(dead_code)]
-    pub fn set_50pc_random( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
-        self.set_n_random( WORLD_Z * WORLD_Y * WORLD_X / 2, world_holder )
+    pub fn set_50pc_random( world_holder:&mut dyn WorldHolder ) -> TestDataset {
+        Self::set_n_random( WORLD_Z * WORLD_Y * WORLD_X / 2, world_holder )
     }
 
     #[allow(dead_code)]
-    pub fn set_50pc_uniques( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
-        self.set_n_uniques( WORLD_Z * WORLD_Y * WORLD_X / 2, world_holder )
+    pub fn set_50pc_uniques( world_holder:&mut dyn WorldHolder ) -> TestDataset {
+        Self::set_n_uniques( WORLD_Z * WORLD_Y * WORLD_X / 2, world_holder )
     }
 
     #[allow(dead_code)]
-    pub fn set_99pc( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
-        self.set_n( WORLD_Z * WORLD_Y * WORLD_X - 1, world_holder )
+    pub fn set_99pc( world_holder:&mut dyn WorldHolder ) -> TestDataset {
+        Self::set_n( WORLD_Z * WORLD_Y * WORLD_X - 1, world_holder )
     }
 
     #[allow(dead_code)]
-    pub fn set_100_uniques( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
-        self.set_n_uniques( WORLD_Z * WORLD_Y * WORLD_X, world_holder )
+    pub fn set_100_uniques( world_holder:&mut dyn WorldHolder ) -> TestDataset {
+        Self::set_n_uniques( WORLD_Z * WORLD_Y * WORLD_X, world_holder )
     }
 
     #[allow(dead_code)]
-    pub fn fill_50pc( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
-        self.fill( (0, 0, 0), (WORLD_Z, WORLD_Y, WORLD_X / 2), world_holder )
+    pub fn fill_50pc( world_holder:&mut dyn WorldHolder ) -> TestDataset {
+        Self::fill( (0, 0, 0), (WORLD_Z, WORLD_Y, WORLD_X / 2), world_holder )
     }
 
-    pub fn fill_50pc_realistically( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    pub fn fill_50pc_realistically( world_holder:&mut dyn WorldHolder ) -> TestDataset {
         println!( "Filling base" );
-        let mut dataset = self.fill( (0, WORLD_Y / 2, 0), (WORLD_Z, WORLD_Y, WORLD_X), world_holder );
+        let mut dataset = Self::fill( (0, WORLD_Y / 2, 0), (WORLD_Z, WORLD_Y, WORLD_X), world_holder );
 
         println!( "Filling deposits" );
         let noise = SimplexNoise::new( 50 );
@@ -187,28 +145,28 @@ impl Tester {
         } ) );
 
         let coal = dataset.voxels.get( &coal_key ).unwrap().clone();
-        let n = (WORLD_Z * (WORLD_Y / 2) * WORLD_X);
+        let n = WORLD_Z * (WORLD_Y / 2) * WORLD_X;
 
         for num in 0..n {
-            let (x, y, z) = self.get_3d_indices_from_n( num );
+            let (x, y, z) = Self::get_3d_indices_from_n( num );
             let noise_value = noise.noise3d( x as f64, y as f64, z as f64 );
 
             if noise_value > 0.85 {
                 world_holder.set_voxel( x, y, z, Some( coal.clone() ) );
             }
 
-            self.print_num( num, n );
+            Self::print_num( num, n );
         }
 
         dataset
     }
 
     #[allow(dead_code)]
-    pub fn fill_100pc( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
-        self.fill( (0, 0, 0), (WORLD_Z, WORLD_Y, WORLD_X), world_holder )
+    pub fn fill_100pc( world_holder:&mut dyn WorldHolder ) -> TestDataset {
+        Self::fill( (0, 0, 0), (WORLD_Z, WORLD_Y, WORLD_X), world_holder )
     }
 
-    fn set_n( &self, n:u32, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    fn set_n( n:u32, world_holder:&mut dyn WorldHolder ) -> TestDataset {
         let key = String::from( "default" );
         let materials = HashMap::from([ (key.clone(), Rc::new( Material { _density:100 } )) ]);
         let colors = HashMap::from([ (key.clone(), Rc::new( Color { _red:50, _green:100, _blue:200 } )) ]);
@@ -226,17 +184,17 @@ impl Tester {
         let voxel = voxels.get( &key ).unwrap();
 
         for num in 0..cmp::min( n, WORLD_Z * WORLD_Y * WORLD_X ) {
-            let (x, y, z) = self.get_3d_indices_from_n( num );
+            let (x, y, z) = Self::get_3d_indices_from_n( num );
             world_holder.set_voxel( x, y, z, Some( voxel.clone() ) );
 
             if num == n { break }
-            self.print_num( num, n );
+            Self::print_num( num, n );
         }
 
         TestDataset { materials, colors, common_voxel_dataset, voxels }
     }
 
-    fn set_n_random( &self, n:u32, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    fn set_n_random( n:u32, world_holder:&mut dyn WorldHolder ) -> TestDataset {
         let key = String::from( "default" );
         let materials = HashMap::from([ (key.clone(), Rc::new( Material { _density:100 } )) ]);
         let colors = HashMap::from([ (key.clone(), Rc::new( Color { _red:50, _green:100, _blue:200 } )) ]);
@@ -255,23 +213,23 @@ impl Tester {
         let random = (0..(WORLD_Z * WORLD_Y * WORLD_X)).choose_multiple( &mut rng, n as usize );
 
         for num in random {
-            let (x, y, z) = self.get_3d_indices_from_n( num );
+            let (x, y, z) = Self::get_3d_indices_from_n( num );
             world_holder.set_voxel( x, y, z, Some( voxels.get( &key ).unwrap().clone() ) );
 
-            self.print_num( num, n );
+            Self::print_num( num, n );
         }
 
         TestDataset { materials, colors, common_voxel_dataset, voxels }
     }
 
-    fn set_n_uniques( &self, n:u32, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    fn set_n_uniques( n:u32, world_holder:&mut dyn WorldHolder ) -> TestDataset {
         let mut materials = HashMap::new();
         let mut colors = HashMap::new();
         let mut common_voxel_dataset = HashMap::new();
         let mut voxels:HashMap<_, Rc<Voxel>> = HashMap::new();
 
         for num in 0..cmp::min( n, WORLD_Z * WORLD_Y * WORLD_X ) {
-            let (x, y, z) = self.get_3d_indices_from_n( num );
+            let (x, y, z) = Self::get_3d_indices_from_n( num );
             let red = (z % 255) as u8;
             let green = (y % 255) as u8;
             let blue = (x % 255) as u8;
@@ -314,13 +272,13 @@ impl Tester {
 
             world_holder.set_voxel( x, y, z, Some( voxel.clone() ) );
 
-            self.print_num( num, n );
+            Self::print_num( num, n );
         }
 
         TestDataset { materials, colors, common_voxel_dataset, voxels }
     }
 
-    fn fill( &self, from:(u32, u32, u32), to:(u32, u32, u32), world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    fn fill( from:(u32, u32, u32), to:(u32, u32, u32), world_holder:&mut dyn WorldHolder ) -> TestDataset {
         let key = String::from( "default" );
         let materials = HashMap::from([ (key.clone(), Rc::new( Material { _density:100 } )) ]);
         let colors = HashMap::from([ (key.clone(), Rc::new( Color { _red:50, _green:100, _blue:200 } )) ]);
@@ -342,7 +300,7 @@ impl Tester {
         TestDataset { materials, colors, common_voxel_dataset, voxels }
     }
 
-    fn print_num( &self, num:u32, max:u32 ) {
+    fn print_num( num:u32, max:u32 ) {
         if num % 200_000 == 0 {
             println!( " num={num}" );
 
@@ -352,7 +310,7 @@ impl Tester {
         }
     }
 
-    fn get_3d_indices_from_n( &self, n:u32 ) -> (u32, u32, u32) {
+    fn get_3d_indices_from_n( n:u32 ) -> (u32, u32, u32) {
         let z = n / (WORLD_Y * WORLD_Z);
         let y = (n % (WORLD_Y * WORLD_Z)) / WORLD_Z;
         let x = n % WORLD_Z;

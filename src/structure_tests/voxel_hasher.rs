@@ -3,7 +3,7 @@ use std::hash::{ Hash, Hasher };
 use std::mem::{ size_of, size_of_val };
 use std::rc::Rc;
 
-use super::tester::{Voxel, WorldHolder};
+use crate::world::world_holder::{Voxel, WorldHolder};
 
 
 #[derive( Debug, PartialEq, Eq )]
