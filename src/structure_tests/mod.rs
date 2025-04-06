@@ -4,10 +4,16 @@ pub mod voxel_list;
 pub mod octree;
 pub mod voxel_hasher;
 
-use octree::Octree;
+use std::time::Instant;
+
 use tester::WorldHolder;
 
+#[allow(unused_imports)]
+use octree::Octree;
+
+#[allow(unused_imports)]
 use voxel_hasher::VoxelHashMap;
+
 #[allow(unused_imports)]
 use voxel_list::VoxelList;
 
@@ -23,15 +29,17 @@ pub fn run_test() {
     // let mut world_struct = VoxelList::new();
     let mut world_struct = Octree::new( 18 );
     // let mut world_struct = VoxelHashMap::new();
-    let dataset = tester.fill_100pc( &mut world_struct );
+    let time_start = Instant::now();
+    let dataset = tester.fill_50pc_realistically( &mut world_struct );
+    let time_duration = time_start.elapsed();
 
     println!( "" );
-    println!( "{:?}", world_struct.get_voxel( 0, 0, 0 ) );
-    println!( "{:?}", world_struct.get_voxel( 100, 100, 100 ) );
 
     println!( "" );
     dataset.get_size();
     println!( "" );
     world_struct.get_size();
+    println!( "" );
+    println!( "Time duration = {:?}", time_duration );
     println!( "" );
 }

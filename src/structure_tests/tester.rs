@@ -1,8 +1,12 @@
+use crate::noise::simplex_noise::SimplexNoise;
+use crate::{noise::generate_simplex_noise_image, world};
+
+use crate::world::ores::generate_ores;
 use std::{ cmp, collections::HashMap, mem::size_of, rc::Rc };
 
 use rand::seq::IteratorRandom;
 
-pub const RENDER_DISTANCE:u32 = 512;
+pub const RENDER_DISTANCE:u32 = 32 * 16;
 pub const WORLD_Z:u32 = RENDER_DISTANCE * 2 + 1;
 pub const WORLD_Y:u32 = 384;
 pub const WORLD_X:u32 = RENDER_DISTANCE * 2 + 1;
@@ -161,6 +165,44 @@ impl Tester {
         self.fill( (0, 0, 0), (WORLD_Z, WORLD_Y, WORLD_X / 2), world_holder )
     }
 
+    pub fn fill_50pc_realistically( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+        println!( "Filling base" );
+        let mut dataset = self.fill( (0, WORLD_Y / 2, 0), (WORLD_Z, WORLD_Y, WORLD_X), world_holder );
+
+        println!( "Filling deposits" );
+        let noise = SimplexNoise::new( 50 );
+        let coal_key = String::from( "coal" );
+
+        dataset.colors.insert( coal_key.clone(), Rc::new( Color { _red:0, _green:0, _blue:0 } ) );
+        dataset.materials.insert( coal_key.clone(), Rc::new( Material { _density:125 } ) );
+
+        dataset.common_voxel_dataset.insert( coal_key.clone(), Rc::new( CommonVoxelData {
+            _color: dataset.colors.get( &coal_key ).unwrap().clone(),
+            _material: dataset.materials.get( &coal_key ).unwrap().clone()
+        } ) );
+
+        dataset.voxels.insert( coal_key.clone(), Rc::new( Voxel {
+            _common_data: dataset.common_voxel_dataset.get( &coal_key ).unwrap().clone(),
+            _individual_data:vec![]
+        } ) );
+
+        let coal = dataset.voxels.get( &coal_key ).unwrap().clone();
+        let n = (WORLD_Z * (WORLD_Y / 2) * WORLD_X);
+
+        for num in 0..n {
+            let (x, y, z) = self.get_3d_indices_from_n( num );
+            let noise_value = noise.noise3d( x as f64, y as f64, z as f64 );
+
+            if noise_value > 0.85 {
+                world_holder.set_voxel( x, y, z, Some( coal.clone() ) );
+            }
+
+            self.print_num( num, n );
+        }
+
+        dataset
+    }
+
     #[allow(dead_code)]
     pub fn fill_100pc( &self, world_holder:&mut dyn WorldHolder ) -> TestDataset {
         self.fill( (0, 0, 0), (WORLD_Z, WORLD_Y, WORLD_X), world_holder )
@@ -301,10 +343,10 @@ impl Tester {
     }
 
     fn print_num( &self, num:u32, max:u32 ) {
-        if num % 50_000 == 0 {
+        if num % 200_000 == 0 {
             println!( " num={num}" );
 
-            if num % 3_000_000 == 0 {
+            if num % 5_000_000 == 0 {
                 println!( "  max reminder: {max}" );
             }
         }
