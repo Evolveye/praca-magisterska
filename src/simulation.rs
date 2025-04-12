@@ -9,7 +9,6 @@ use winit::{
 
 use super::{
   rendering::renderer::Renderer,
-  world,
   window_manager::WindowManager,
 };
 
@@ -104,7 +103,7 @@ impl AppSettings {
 pub struct Simulation {
   renderer: Renderer,
   window_manager: WindowManager,
-  world: world::World,
+  // world: world::World,
   settings: AppSettings,
   control_manager: ControlManager,
 
@@ -126,7 +125,7 @@ impl Simulation {
     Ok( Simulation {
       window_manager,
       renderer,
-      world: world::World::new(),
+      // world: world::World::new(),
       control_manager: ControlManager::new( point3( 0.0, 20.0, -35.0 ), point3( 0.0, 0.0, -8.0 ) ),
       settings: AppSettings::new(),
 
@@ -144,7 +143,7 @@ impl Simulation {
     let center = PhysicalPosition::new( window_size.width as f64 / 2.0, window_size.height as f64 / 2.0 );
     let mut minimized = false;
 
-    window_manager.event_loop.take().expect( "Event loop used in the past" ).run( |event, elwt| {
+    window_manager.event_loop.take().expect( "Event loop has been used in the past" ).run( |event, elwt| {
       match event {
         Event::AboutToWait => window_manager.window.request_redraw(),
 
@@ -214,10 +213,7 @@ impl Simulation {
           _ => {}
         }
 
-        Event::DeviceEvent {
-          event: winit::event::DeviceEvent::MouseMotion { delta },
-          ..
-        } => {
+        Event::DeviceEvent { event: winit::event::DeviceEvent::MouseMotion { delta }, .. } => {
           let (dx, dy) = delta;
           self.control_manager.rotation.y += dx as f32 * self.settings.rotation_sensitivity;
           self.control_manager.rotation.x -= dy as f32 * self.settings.rotation_sensitivity;

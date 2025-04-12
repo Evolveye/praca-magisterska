@@ -298,25 +298,3 @@ impl Model {
 pub struct ModelInstance {
   pub translate: Vec3
 }
-
-impl ModelInstance {
-  pub fn binding_description() -> vk::VertexInputBindingDescription {
-    vk::VertexInputBindingDescription::builder()
-      .binding( 1 )
-      .stride( size_of::<ModelInstance>() as u32 )
-      .input_rate( vk::VertexInputRate::INSTANCE )
-      .build()
-  }
-
-  pub fn attribute_description() -> [ vk::VertexInputAttributeDescription; 1 ] {
-    let instance_matrix = vk::VertexInputAttributeDescription::builder()
-      .binding( 1 )
-      .location( 4 )
-      .format( vk::Format::R32G32B32_SFLOAT )
-      // .format( vk::Format::R32G32B32A32_SFLOAT )
-      .offset( 0 )
-      .build();
-
-    [ instance_matrix ]
-  }
-}

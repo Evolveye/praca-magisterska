@@ -1,10 +1,16 @@
-use std::{hash::{Hash, Hasher}, mem::size_of};
-
-use vulkanalia::prelude::v1_0::*;
+use std::hash::{ Hash, Hasher };
 use vulkanalia::vk;
 
 type Vec2 = cgmath::Vector2<f32>;
 type Vec3 = cgmath::Vector3<f32>;
+
+
+pub trait RendererModelDescriptions {
+  fn binding_description() -> vk::VertexInputBindingDescription;
+  fn attribute_description() -> Vec<vk::VertexInputAttributeDescription>;
+  fn instances_binding_description() -> vk::VertexInputBindingDescription;
+  fn instances_attribute_description() -> Vec<vk::VertexInputAttributeDescription>;
+}
 
 
 
@@ -22,46 +28,6 @@ pub struct Vertex {
 impl Vertex {
   pub const fn new( pos:Vec3, color:Vec3, normal:Vec3, tex_coord:Vec2 ) -> Self {
     Self { pos, color, normal, tex_coord }
-  }
-
-  pub fn binding_description() -> vk::VertexInputBindingDescription {
-    vk::VertexInputBindingDescription::builder()
-      .binding( 0 )
-      .stride( size_of::<Vertex>() as u32 )
-      .input_rate( vk::VertexInputRate::VERTEX )
-      .build()
-  }
-
-  pub fn attribute_description() -> [ vk::VertexInputAttributeDescription; 4 ] {
-    let pos = vk::VertexInputAttributeDescription::builder()
-      .binding( 0 )
-      .location( 0 )
-      .format( vk::Format::R32G32B32_SFLOAT )
-      .offset( 0 )
-      .build();
-
-    let color = vk::VertexInputAttributeDescription::builder()
-      .binding( 0 )
-      .location( 1 )
-      .format( vk::Format::R32G32B32_SFLOAT )
-      .offset( size_of::<Vec3>() as u32 )
-      .build();
-
-    let normal = vk::VertexInputAttributeDescription::builder()
-      .binding( 0 )
-      .location( 2 )
-      .format( vk::Format::R32G32B32_SFLOAT )
-      .offset( (size_of::<Vec3>() + size_of::<Vec3>()) as u32 )
-      .build();
-
-    let tex_coord = vk::VertexInputAttributeDescription::builder()
-      .binding( 0 )
-      .location( 3 )
-      .format( vk::Format::R32G32_SFLOAT )
-      .offset( (size_of::<Vec3>() + size_of::<Vec3>() + size_of::<Vec3>()) as u32 )
-      .build();
-
-    [ pos, color, normal, tex_coord ]
   }
 }
 

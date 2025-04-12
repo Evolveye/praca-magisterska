@@ -3,4 +3,4 @@ function compile {
   glslc ./src/rendering/shaders/$1/shader.frag -o ./src/rendering/shaders/$1/frag.spv
 }
 
-compile 'model-textured-lighted'
+compile 'voxels'

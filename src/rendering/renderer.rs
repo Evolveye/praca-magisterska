@@ -29,10 +29,11 @@ use std::time::{ Instant, Duration };
 use std::f32::consts::PI;
 
 use crate::window_manager::WindowManager;
+use crate::world::world_holder::Voxel;
 
 use super::model::Model;
 use super::buffer::*;
-use super::pipeline::create_pipeline_for_model;
+use super::pipeline::{create_pipeline_for_instances, create_pipeline_for_model};
 use super::texture::Texture;
 
 type Vec3 = cgmath::Vector3<f32>;
@@ -44,7 +45,7 @@ const VALIDATION_ENABLED:bool = cfg!( debug_assertions );
 const VALIDATION_LAYER:vk::ExtensionName = vk::ExtensionName::from_bytes( b"VK_LAYER_KHRONOS_validation" );
 const DEVICE_EXTENSIONS:&[ vk::ExtensionName ] = &[ vk::KHR_SWAPCHAIN_EXTENSION.name ];
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
-const INSTANCED_RENDERING:bool = false;
+const INSTANCED_RENDERING:bool = true;
 
 
 #[derive(Clone, Debug)]
@@ -65,7 +66,9 @@ impl Renderer {
     let mut data = AppData::default();
     let instance = create_instance( window, &entry, &mut data )?;
 
-    data.instances_count = 20;
+    data.mode = AppMode::VOXELS;
+    data.instances_count = 1;
+    // data.instances_count = 20;
     data.surface = vk_window::create_surface( &instance, &window, &window )?;
     pick_physical_device( &instance, &mut data )?;
 
@@ -75,8 +78,15 @@ impl Renderer {
     create_swapchain_image_views( &device, &mut data )?;
     create_render_pass( &instance, &device, &mut data )?;
     create_descriptor_set_layout( &device, &mut data )?;
-    create_pipeline_for_model( &device, &mut data )?;
+
+    match data.mode {
+      AppMode::VOXELS => create_pipeline_for_instances::<Voxel>( &device, &mut data )?,
+      _ => create_pipeline_for_instances::<Model>( &device, &mut data )?,
+    }
+
+    // create_pipeline_for_model( &device, &mut data )?;
     create_command_pools( &instance, &device, &mut data )?;
+
     create_color_objects( &instance, &device, &mut data )?;
     create_depth_objects( &instance, &device, &mut data )?;
     create_framebuffers( &device, &mut data )?;
@@ -207,7 +217,13 @@ impl Renderer {
     create_swapchain(window, &self.instance, &self.device, &mut self.data)?;
     create_swapchain_image_views( &self.device, &mut self.data )?;
     create_render_pass( &self.instance, &self.device, &mut self.data )?;
-    create_pipeline_for_model( &self.device, &mut self.data )?;
+    // create_pipeline_for_model( &self.device, &mut self.data )?;
+
+    match self.data.mode {
+      AppMode::VOXELS => create_pipeline_for_instances::<Voxel>( &self.device, &mut self.data )?,
+      _ => create_pipeline_for_instances::<Model>( &self.device, &mut self.data )?,
+    }
+
     create_color_objects( &self.instance, &self.device, &mut self.data )?;
     create_depth_objects( &self.instance, &self.device, &mut self.data )?;
     create_framebuffers( &self.device, &mut self.data )?;
@@ -515,8 +531,25 @@ impl Renderer {
 
 
 
+#[derive(Clone, Debug)]
+pub enum AppMode {
+  UNDETERMINATED,
+  INSTANCES_TEXTURED_LIGHTED,
+  INSTANCES_UNTEXTURED_UNLIGHTED,
+  VOXELS,
+}
+
+impl Default for AppMode {
+  fn default() -> Self {
+      AppMode::UNDETERMINATED
+  }
+}
+
+
+
 #[derive(Clone, Debug, Default)]
 pub struct AppData {
+  pub mode: AppMode,
   pub surface: vk::SurfaceKHR,
   pub messenger: vk::DebugUtilsMessengerEXT,
   pub physical_device: vk::PhysicalDevice,

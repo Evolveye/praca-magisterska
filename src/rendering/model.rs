@@ -12,7 +12,7 @@ use vulkanalia::{
   prelude::v1_0::*
 };
 
-use super::vertex::Vertex;
+use super::vertex::{RendererModelDescriptions, Vertex};
 use super::buffer::{ create_buffer, copy_buffer };
 
 type Vec3 = cgmath::Vector3<f32>;
@@ -76,7 +76,7 @@ impl Model {
     vertices: Vec<Vertex>,
     indices: Vec<u32>
   ) -> Result<Self> {
-    let instances_count = 1;
+    let instances_count = 10000;
 
     let ( index_buffer, index_buffer_memory ) = Model::create_index_buffer( instance, device, physical_device, command_pool, graphics_queue, &indices )?;
     let ( vertex_buffer, vertex_buffer_memory ) = Model::create_vertex_buffer( instance, device, physical_device, command_pool, graphics_queue, &vertices )?;
@@ -288,12 +288,18 @@ impl Model {
     // TODO Instances data
     let radius = 10.0;
     let instances_data = (0..instances_count).map( |model_index| {
-      let theta = 2.0 * std::f32::consts::PI * (model_index as f32) / (instances_count as f32);
-      let x = radius * theta.cos();
-      let z = radius * theta.sin();
+      // // RING
+      // let theta = 2.0 * std::f32::consts::PI * (model_index as f32) / (instances_count as f32);
+      // let x = radius * theta.cos();
+      // let z = radius * theta.sin();
+      // let translate = Vector3::new( x, 0.0, z );
+      // ModelInstance { translate }
 
-      let translate = Vector3::new( x, z / 3.0, z );
-
+      let side_size = 50;
+      let x = (model_index % side_size) as f32;
+      let y = (model_index / (side_size * side_size)) as f32;
+      let z = ((model_index / side_size) % side_size) as f32;
+      let translate = Vector3::new( x, y, z );
       ModelInstance { translate }
     } )
     .collect::<Vec<ModelInstance>>();
@@ -329,14 +335,15 @@ impl Model {
     device.free_memory( self.instance_buffer_memory, None );
   }
 
-  pub unsafe fn render( &self, device:&Device, command_buffer:vk::CommandBuffer ) {
-    device.cmd_bind_vertex_buffers( command_buffer, 0, &[ self.vertex_buffer ], &[ 0, 0 ] );
-    device.cmd_bind_index_buffer( command_buffer, self.index_buffer, 0, vk::IndexType::UINT32 );
-    device.cmd_draw_indexed( command_buffer, self.indices.len() as u32, 1, 0, 0, 0 );
+  // pub unsafe fn render( &self, device:&Device, command_buffer:vk::CommandBuffer ) {
+  //   device.cmd_bind_vertex_buffers( command_buffer, 0, &[ self.vertex_buffer ], &[ 0, 0 ] );
+  //   device.cmd_bind_index_buffer( command_buffer, self.index_buffer, 0, vk::IndexType::UINT32 );
+  //   device.cmd_draw_indexed( command_buffer, self.indices.len() as u32, 1, 0, 0, 0 );
 
-    // pub unsafe fn render( &self, device:&Device, command_buffer:vk::CommandBuffer ) {
-    // device.cmd_bind_vertex_buffers( command_buffer, 0, &[ self.vertex_buffer, self.instance_buffer ], &[ 0, 0 ] );
-    // device.cmd_draw_indexed( command_buffer, self.indices.len() as u32, self.instances_count, 0, 0, 0 );
+  pub unsafe fn render( &self, device:&Device, command_buffer:vk::CommandBuffer ) {
+    device.cmd_bind_vertex_buffers( command_buffer, 0, &[ self.vertex_buffer, self.instance_buffer ], &[ 0, 0 ] );
+    device.cmd_bind_index_buffer( command_buffer, self.index_buffer, 0, vk::IndexType::UINT32 );
+    device.cmd_draw_indexed( command_buffer, self.indices.len() as u32, self.instances_count, 0, 0, 0 );
   }
 }
 
@@ -346,8 +353,48 @@ pub struct ModelInstance {
   pub translate: Vec3
 }
 
-impl ModelInstance {
-  pub fn binding_description() -> vk::VertexInputBindingDescription {
+impl RendererModelDescriptions for Model {
+  fn binding_description() -> vk::VertexInputBindingDescription {
+    vk::VertexInputBindingDescription::builder()
+      .binding( 0 )
+      .stride( size_of::<Vertex>() as u32 )
+      .input_rate( vk::VertexInputRate::VERTEX )
+      .build()
+  }
+
+  fn attribute_description() -> Vec<vk::VertexInputAttributeDescription> {
+    let pos = vk::VertexInputAttributeDescription::builder()
+      .binding( 0 )
+      .location( 0 )
+      .format( vk::Format::R32G32B32_SFLOAT )
+      .offset( 0 )
+      .build();
+
+    let color = vk::VertexInputAttributeDescription::builder()
+      .binding( 0 )
+      .location( 1 )
+      .format( vk::Format::R32G32B32_SFLOAT )
+      .offset( size_of::<Vec3>() as u32 )
+      .build();
+
+    let normal = vk::VertexInputAttributeDescription::builder()
+      .binding( 0 )
+      .location( 2 )
+      .format( vk::Format::R32G32B32_SFLOAT )
+      .offset( (size_of::<Vec3>() + size_of::<Vec3>()) as u32 )
+      .build();
+
+    let tex_coord = vk::VertexInputAttributeDescription::builder()
+      .binding( 0 )
+      .location( 3 )
+      .format( vk::Format::R32G32_SFLOAT )
+      .offset( (size_of::<Vec3>() + size_of::<Vec3>() + size_of::<Vec3>()) as u32 )
+      .build();
+
+    vec![ pos, color, normal, tex_coord ]
+  }
+
+  fn instances_binding_description() -> vk::VertexInputBindingDescription {
     vk::VertexInputBindingDescription::builder()
       .binding( 1 )
       .stride( size_of::<ModelInstance>() as u32 )
@@ -355,7 +402,7 @@ impl ModelInstance {
       .build()
   }
 
-  pub fn attribute_description() -> [ vk::VertexInputAttributeDescription; 1 ] {
+  fn instances_attribute_description() -> Vec<vk::VertexInputAttributeDescription> {
     let instance_matrix = vk::VertexInputAttributeDescription::builder()
       .binding( 1 )
       .location( 4 )
@@ -364,6 +411,6 @@ impl ModelInstance {
       .offset( 0 )
       .build();
 
-    [ instance_matrix ]
+    vec![ instance_matrix ]
   }
 }

@@ -1,5 +1,5 @@
 mod model;
-mod vertex;
+pub mod vertex;
 pub mod renderer;
 mod texture;
 mod buffer;

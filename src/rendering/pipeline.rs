@@ -2,9 +2,11 @@ use vulkanalia::bytecode::Bytecode;
 use vulkanalia::prelude::v1_0::*;
 use anyhow::Result;
 
+use crate::world::world_holder::Voxel;
+
 use super::model::ModelInstance;
-use super::vertex::Vertex;
-use super::renderer::AppData;
+use super::vertex::{ RendererModelDescriptions, Vertex };
+use super::renderer::{AppData, AppMode};
 
 unsafe fn create_shader_module( device:&Device, bytecode:&[u8] ) -> Result<vk::ShaderModule> {
   let bytecode = Bytecode::new( bytecode ).unwrap();
@@ -26,12 +28,12 @@ unsafe fn create_shader_stage<'a>( device:&Device, shader_bytes:&[u8], stage:vk:
   Ok( (shader_module, vert_stage) )
 }
 
-pub unsafe fn create_pipeline_for_model( device:&Device, data:&mut AppData ) -> Result<()> {
-  let ( vert_shader_module, vert_stage ) = create_shader_stage( device, include_bytes!( "./shaders/model-textured-lighted/vert.spv" ), vk::ShaderStageFlags::VERTEX )?;
-  let ( frag_shader_module, frag_stage ) = create_shader_stage( device, include_bytes!( "./shaders/model-textured-lighted/frag.spv" ), vk::ShaderStageFlags::FRAGMENT )?;
+pub unsafe fn create_pipeline_for_model<T:RendererModelDescriptions>( device:&Device, data:&mut AppData ) -> Result<()> {
+  let ( vert_shader_module, vert_stage ) = create_shader_stage( device, include_bytes!( "./shaders/model-untextured-lighted/vert.spv" ), vk::ShaderStageFlags::VERTEX )?;
+  let ( frag_shader_module, frag_stage ) = create_shader_stage( device, include_bytes!( "./shaders/model-untextured-lighted/frag.spv" ), vk::ShaderStageFlags::FRAGMENT )?;
 
-  let binding_descriptions = &[ Vertex::binding_description() ];
-  let attribute_descriptions = Vertex::attribute_description();
+  let binding_descriptions = &[ T::binding_description() ];
+  let attribute_descriptions = T::attribute_description();
 
   let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
     .vertex_binding_descriptions( binding_descriptions )
@@ -143,26 +145,39 @@ pub unsafe fn create_pipeline_for_model( device:&Device, data:&mut AppData ) -> 
   Ok(())
 }
 
-pub unsafe fn create_pipeline_for_instances( device:&Device, data:&mut AppData ) -> Result<()> {
-  let ( vert_shader_module, vert_stage ) = create_shader_stage( device, include_bytes!( "./shaders/model-textured-lighted/vert.spv" ), vk::ShaderStageFlags::VERTEX )?;
-  let ( frag_shader_module, frag_stage ) = create_shader_stage( device, include_bytes!( "./shaders/model-textured-lighted/frag.spv" ), vk::ShaderStageFlags::FRAGMENT )?;
+pub unsafe fn create_pipeline_for_instances<T:RendererModelDescriptions>( device:&Device, data:&mut AppData ) -> Result<()> {
+  let ( (vert_shader_module, vert_stage), (frag_shader_module, frag_stage) ) = match data.mode {
+    AppMode::VOXELS => (
+      create_shader_stage( device, include_bytes!( "./shaders/voxels/vert.spv" ), vk::ShaderStageFlags::VERTEX )?,
+      create_shader_stage( device, include_bytes!( "./shaders/voxels/frag.spv" ), vk::ShaderStageFlags::FRAGMENT )?
+    ),
 
-  let binding_descriptions = &[ Vertex::binding_description(), ModelInstance::binding_description() ];
-  let attribute_descriptions = {
-    let vertex_description = Vertex::attribute_description();
-    let instance_description = ModelInstance::attribute_description();
+    AppMode::INSTANCES_TEXTURED_LIGHTED => (
+      create_shader_stage( device, include_bytes!( "./shaders/instances-textured-lighted/vert.spv" ), vk::ShaderStageFlags::VERTEX )?,
+      create_shader_stage( device, include_bytes!( "./shaders/instances-textured-lighted/frag.spv" ), vk::ShaderStageFlags::FRAGMENT )?
+    ),
 
-    let mut descriptions: [ vk::VertexInputAttributeDescription; 5 ] = Default::default();
-    let (left, right) = descriptions.split_at_mut( vertex_description.len() );
+    AppMode::INSTANCES_UNTEXTURED_UNLIGHTED => (
+      create_shader_stage( device, include_bytes!( "./shaders/instances-untextured-unlighted/vert.spv" ), vk::ShaderStageFlags::VERTEX )?,
+      create_shader_stage( device, include_bytes!( "./shaders/instances-untextured-unlighted/frag.spv" ), vk::ShaderStageFlags::FRAGMENT )?
+    ),
 
-    left.copy_from_slice( &vertex_description );
-    right.copy_from_slice( &instance_description );
+    _ => todo!(),
+  };
 
-    descriptions
+  let (binding_descriptions, attribute_descriptions) = {
+    let binding_descriptions = [ T::binding_description(), T::instances_binding_description() ];
+    let attribute_descriptions = {
+      let vertex_description = T::attribute_description();
+      let instance_description = T::instances_attribute_description().to_vec();
+      [ vertex_description, instance_description ].concat()
+    };
+
+    (binding_descriptions, attribute_descriptions)
   };
 
   let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
-    .vertex_binding_descriptions( binding_descriptions )
+    .vertex_binding_descriptions( &binding_descriptions )
     .vertex_attribute_descriptions( &attribute_descriptions );
 
   // let instance_binding_descriptions = &[ ModelInstance::binding_description() ];
