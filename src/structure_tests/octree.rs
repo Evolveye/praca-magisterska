@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::world::world_holder::{Voxel, WorldHolder};
+use crate::{rendering::vertex::Renderable, world::world_holder::{Voxel, WorldHolder}};
 
 #[derive(Debug)]
 pub enum OctreeNode<T> {

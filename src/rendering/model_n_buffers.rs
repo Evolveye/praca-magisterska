@@ -12,11 +12,8 @@ use vulkanalia::{
   prelude::v1_0::*
 };
 
-use super::vertex::Vertex;
+use super::vertex::{ Vec3, Vertex };
 use super::buffer::{ create_buffer, copy_buffer };
-
-type Mat4 = cgmath::Matrix4<f32>;
-type Vec3 = cgmath::Vector3<f32>;
 
 
 
@@ -33,6 +30,7 @@ pub struct Model {
   pub instance_buffer_memory: vk::DeviceMemory,
 }
 
+#[allow(dead_code)]
 impl Model {
   pub unsafe fn new(
     instance: &Instance,

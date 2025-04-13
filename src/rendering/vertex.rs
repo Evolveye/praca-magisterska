@@ -1,9 +1,16 @@
 use std::hash::{ Hash, Hasher };
-use vulkanalia::vk;
+use vulkanalia::{
+  vk,
+  prelude::v1_0::Device,
+};
 
-type Vec2 = cgmath::Vector2<f32>;
-type Vec3 = cgmath::Vector3<f32>;
+pub type Vec2 = cgmath::Vector2<f32>;
+pub type Vec3 = cgmath::Vector3<f32>;
 
+
+pub trait Renderable {
+  unsafe fn render( &self, device:&Device, command_buffer:vk::CommandBuffer );
+}
 
 pub trait RendererModelDescriptions {
   fn binding_description() -> vk::VertexInputBindingDescription;

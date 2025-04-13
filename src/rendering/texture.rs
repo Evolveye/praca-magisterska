@@ -26,7 +26,7 @@ impl Texture {
     let ( image, image_memory, mip_levels ) = Texture::create_texture_image( instance, device, data, src )?;
     let image_view = Texture::create_texture_image_view( device, image, mip_levels )?;
     let sampler = Texture::create_texture_sampler( device, mip_levels )?;
-    let descriptor_set = Self::create_texture_descriptor_set( device, data.texture_descriptor_set_layout, data.descriptor_pool, image_view, sampler )?;
+    let descriptor_set = Texture::create_texture_descriptor_set( device, data.texture_descriptor_set_layout, data.descriptor_pool, image_view, sampler )?;
 
     Ok( Self {
       image,

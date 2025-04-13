@@ -6,7 +6,7 @@
 )]
 
 use anyhow::{ anyhow, Result };
-use cgmath::{ point2, point3, vec2, vec3, Deg, InnerSpace, Point2, Point3, Vector3 };
+use cgmath::{ vec3, Deg };
 use log::*;
 use thiserror::Error;
 
@@ -25,16 +25,16 @@ use std::os::raw::c_void;
 use std::ffi::CStr;
 use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
-use std::time::{ Instant, Duration };
-use std::f32::consts::PI;
+use std::time::Instant;
 
 use crate::window_manager::WindowManager;
 use crate::world::world_holder::Voxel;
 
 use super::model::Model;
 use super::buffer::*;
-use super::pipeline::{create_pipeline_for_instances, create_pipeline_for_model};
+use super::pipeline::{ create_pipeline_for_instances, create_pipeline_for_model };
 use super::texture::Texture;
+use super::vertex::Renderable;
 
 type Vec3 = cgmath::Vector3<f32>;
 type Mat4 = cgmath::Matrix4<f32>;
@@ -66,7 +66,7 @@ impl Renderer {
     let mut data = AppData::default();
     let instance = create_instance( window, &entry, &mut data )?;
 
-    data.mode = AppMode::VOXELS;
+    data.mode = AppMode::Voxels;
     data.instances_count = 1;
     // data.instances_count = 20;
     data.surface = vk_window::create_surface( &instance, &window, &window )?;
@@ -80,7 +80,8 @@ impl Renderer {
     create_descriptor_set_layout( &device, &mut data )?;
 
     match data.mode {
-      AppMode::VOXELS => create_pipeline_for_instances::<Voxel>( &device, &mut data )?,
+      AppMode::Model => create_pipeline_for_model::<Model>( &device, &mut data )?,
+      AppMode::Voxels => create_pipeline_for_instances::<Voxel>( &device, &mut data )?,
       _ => create_pipeline_for_instances::<Model>( &device, &mut data )?,
     }
 
@@ -122,13 +123,11 @@ impl Renderer {
   }
 
 
-  pub unsafe fn load_cube( &mut self ) -> Result<()> {
-    let Renderer { ref instance, ref device, ref mut data, .. } = self;
+  pub unsafe fn load_cube( &mut self ) -> Result<Model> {
+    self.data.model = Model::new_cube( &self )?;
+    self.data.texture = Texture::load( &self.instance, &self.device, &self.data, "src/rendering/resources/uv_map.png" )?;
 
-    data.model = Model::new_cube( instance, device, data.physical_device, data.command_pool, data.graphics_queue )?;
-    data.texture = Texture::load( &instance, &device, data, "src/rendering/resources/uv_map.png" )?;
-
-    Ok(())
+    Ok( self.data.model.clone() )
   }
 
   pub unsafe fn load_model_with_texture( &mut self, model:Model, texture:Texture ) -> Result<()> {
@@ -141,8 +140,6 @@ impl Renderer {
   }
 
   pub unsafe fn load_model_from_sources( &mut self, model_src:&str, texture_src:&str ) -> Result<()> {
-    let Renderer { ref instance, ref device, ref mut data, .. } = self;
-
     // create_texture_image( instance, device, data, "src/rendering/resources/viking_room.png" )?;
     // create_texture_image( instance, device, data, "src/rendering/resources/barrel.png" )?;
     // create_texture_image_view( device, data )?;
@@ -152,13 +149,9 @@ impl Renderer {
     // load_model( data, "src/rendering/resources/viking_room.obj" )?;
     // load_model( data, "src/rendering/resources/bunny.obj" )?;
 
-    data.model = Model::from_file(
-      instance, device,
-      data.physical_device, data.command_pool, data.graphics_queue,
-      model_src,
-    )?;
+    self.data.model = Model::from_file( &self, model_src )?;
 
-    data.texture = Texture::load( &instance, &device, data, texture_src )?;
+    self.data.texture = Texture::load( &self.instance, &self.device, &self.data, texture_src )?;
     // load_model( data, "src/rendering/resources/barrel.obj" )?;
     // create_vertex_buffer( instance, device, data )?;
     // create_index_buffer( instance, device, data )?;
@@ -168,8 +161,12 @@ impl Renderer {
     Ok(())
   }
 
-  pub unsafe fn destroy( &mut self ) {
+  pub unsafe fn device_wait_idle( &self ) {
     self.device.device_wait_idle().unwrap();
+  }
+
+  pub unsafe fn destroy( &mut self ) {
+    self.device_wait_idle();
 
     self.destroy_swapchain();
     self.data.texture.destroy( &self.device );
@@ -181,9 +178,14 @@ impl Renderer {
     // self.device.free_memory( self.data.texture_image_memory, None );
 
     self.device.destroy_descriptor_set_layout( self.data.uniform_descriptor_set_layout, None );
-    self.device.destroy_descriptor_set_layout( self.data.texture_descriptor_set_layout, None );
 
-    self.data.model.destroy( &self.device );
+    self.device.destroy_descriptor_set_layout( self.data.texture_descriptor_set_layout, None );
+    // match self.data.mode {
+    //   AppMode::VOXELS => {},
+    //   _ => self.device.destroy_descriptor_set_layout( self.data.texture_descriptor_set_layout, None ),
+    // }
+
+    // self.data.model.destroy( &self.device );
 
     // self.device.destroy_buffer( self.data.instance_buffer, None );
     // self.device.free_memory( self.data.instance_buffer_memory, None );
@@ -217,10 +219,10 @@ impl Renderer {
     create_swapchain(window, &self.instance, &self.device, &mut self.data)?;
     create_swapchain_image_views( &self.device, &mut self.data )?;
     create_render_pass( &self.instance, &self.device, &mut self.data )?;
-    // create_pipeline_for_model( &self.device, &mut self.data )?;
 
     match self.data.mode {
-      AppMode::VOXELS => create_pipeline_for_instances::<Voxel>( &self.device, &mut self.data )?,
+      AppMode::Model => create_pipeline_for_model::<Model>( &self.device, &mut self.data )?,
+      AppMode::Voxels => create_pipeline_for_instances::<Voxel>( &self.device, &mut self.data )?,
       _ => create_pipeline_for_instances::<Model>( &self.device, &mut self.data )?,
     }
 
@@ -231,8 +233,12 @@ impl Renderer {
     create_uniform_buffers( &self.instance, &self.device, &mut self.data )?;
     create_descriptor_pool( &self.device, &mut self.data )?;
     create_descriptor_sets( &self.device, &mut self.data )?;
-    // let mut texture = self.data.texture;
-    self.data.texture.recreate_descriptor_set( &self.device, self.data.texture_descriptor_set_layout, self.data.descriptor_pool )?;
+
+    match self.data.mode {
+      AppMode::Voxels => {},
+      _ => self.data.texture.recreate_descriptor_set( &self.device, self.data.texture_descriptor_set_layout, self.data.descriptor_pool )?,
+    }
+
     create_command_buffers( &self.device, &mut self.data )?;
 
     self.data.images_in_flight.resize( self.data.swapchain_images.len() , vk::Fence::null() );
@@ -267,7 +273,7 @@ impl Renderer {
 
 
 
-  pub unsafe fn render( &mut self, window_manager:&mut WindowManager, view_matrix:Mat4 ) -> Result<()> {
+  pub unsafe fn render( &mut self, window_manager:&mut WindowManager, view_matrix:Mat4, models:Vec<&dyn Renderable> ) -> Result<()> {
     self.device.wait_for_fences( &[ self.data.in_flight_fences[ self.frame ] ], true, u64::MAX )?;
 
     let result = self.device.acquire_next_image_khr(
@@ -289,7 +295,7 @@ impl Renderer {
 
     self.data.images_in_flight[ image_index ] = self.data.in_flight_fences[ self.frame ];
 
-    self.update_command_buffer( image_index )?;
+    self.update_command_buffer( image_index, models )?;
     self.update_uniform_buffer( image_index, view_matrix )?;
 
     let wait_semaphores = &[ self.data.image_available_semaphores[ self.frame ] ];
@@ -373,7 +379,7 @@ impl Renderer {
     Ok(())
   }
 
-  unsafe fn update_command_buffer( &mut self, image_index:usize ) -> Result<()> {
+  unsafe fn update_command_buffer( &mut self, image_index:usize, models:Vec<&dyn Renderable> ) -> Result<()> {
     let command_pool = self.data.command_pools[ image_index ];
     self.device.reset_command_pool( command_pool, vk::CommandPoolResetFlags::empty() )?;
 
@@ -417,8 +423,29 @@ impl Renderer {
     //   } )
     //   .collect::<Vec<_>>();
 
-    let secondary_command_buffers = (0..if INSTANCED_RENDERING { self.models } else { self.data.instances_count })
-      .map( |model_index| {
+    // let secondary_command_buffers = (0..if INSTANCED_RENDERING { self.models } else { self.data.instances_count })
+    //   .map( |model_index| {
+    //     let command_buffers = &mut self.data.secondary_command_buffers[ image_index ];
+
+    //     while model_index >= command_buffers.len() {
+    //       let allocate_info = vk::CommandBufferAllocateInfo::builder()
+    //         .command_pool( self.data.command_pools[ image_index ] )
+    //         .level( vk::CommandBufferLevel::SECONDARY )
+    //         .command_buffer_count( 1 );
+
+    //       let command_buffer = self.device.allocate_command_buffers( &allocate_info )?[ 0 ];
+    //       command_buffers.push( command_buffer );
+    //     }
+
+    //     let command_buffer = command_buffers[ model_index ];
+
+    //     self.update_secondary_command_buffer( image_index, model_index, command_buffer )
+    //   } )
+    //   .collect::<Result<Vec<_>, _>>()?;
+
+    let secondary_command_buffers = models.iter()
+      .enumerate()
+      .map( |(model_index, model)| {
         let command_buffers = &mut self.data.secondary_command_buffers[ image_index ];
 
         while model_index >= command_buffers.len() {
@@ -433,7 +460,7 @@ impl Renderer {
 
         let command_buffer = command_buffers[ model_index ];
 
-        self.update_secondary_command_buffer( image_index, model_index, command_buffer )
+        self.update_secondary_command_buffer( image_index, *model, command_buffer )
       } )
       .collect::<Result<Vec<_>, _>>()?;
 
@@ -444,7 +471,7 @@ impl Renderer {
     Ok(())
   }
 
-  unsafe fn update_secondary_command_buffer( &mut self, image_index:usize, model_index:usize, command_buffer:vk::CommandBuffer) -> Result<vk::CommandBuffer> {
+  unsafe fn update_secondary_command_buffer( &mut self, image_index:usize, model:&dyn Renderable, command_buffer:vk::CommandBuffer) -> Result<vk::CommandBuffer> {
     let inheritance_info = vk::CommandBufferInheritanceInfo::builder()
       .render_pass( self.data.render_pass )
       .subpass( 0 )
@@ -462,66 +489,44 @@ impl Renderer {
       vk::PipelineBindPoint::GRAPHICS,
       self.data.pipeline_layout,
       0,
-      &[ self.data.descriptor_sets[ image_index ], self.data.texture.descriptor_set ],
+      &match self.data.mode {
+        AppMode::Voxels => vec![ self.data.descriptor_sets[ image_index ] ],
+        _ => vec![ self.data.descriptor_sets[ image_index ], self.data.texture.descriptor_set ],
+      },
       &[]
     );
 
-    // Model
-    //TODO it have to be written ~~better~~ in correct way
-      let modulo_value = 10;
-      let radius = 10.0;
+    let modulo_value = 10;
+    let radius = 10.0;
 
-      let theta = 2.0 * PI * (model_index as f32) / (self.data.instances_count as f32);
-      let x = (model_index % 3) as f32;
-      let z = (model_index / 3) as f32;
-      // let x = radius * theta.cos();
-      // let z = radius * theta.sin();
+    let model_pos = Mat4::from_translation( vec3( 0.0, 0.0, 0.0 ) );
+    let model_pos_bytes = std::slice::from_raw_parts(
+      &model_pos as *const Mat4 as *const u8,
+      size_of::<Mat4>()
+    );
 
-      // let time = self.last_tick_time.elapsed().as_secs_f32();
+    let opacity = 1.0 as f32;
+    let elapsed = Instant::now().elapsed().as_secs_f32();
 
-      let model = Mat4::from_translation( vec3( x, 0.0, z ) );
-      // * Mat4::from_axis_angle(
-      //   vec3( 0.0, 0.0, 1.0 ),
-      //   Deg( 90.0 ) * time
-      // );
+    let opacity_bytes = &opacity.to_ne_bytes()[..];
 
-      let model_bytes = std::slice::from_raw_parts(
-        &model as *const Mat4 as *const u8,
-        size_of::<Mat4>()
-      );
+    self.device.cmd_push_constants(
+      command_buffer,
+      self.data.pipeline_layout,
+      vk::ShaderStageFlags::VERTEX,
+      0,
+      model_pos_bytes,
+    );
 
-      // let opacity = 0.2 as f32;
-      // let opacity = 1.0f32; //(model_index + 1) as f32 * 0.25;
-      // let opacity = (4 - model_index) as f32 * 0.25;
+    self.device.cmd_push_constants(
+      command_buffer,
+      self.data.pipeline_layout,
+      vk::ShaderStageFlags::FRAGMENT,
+      64,
+      opacity_bytes,
+    );
 
-      let opacity = 1.0 as f32;
-      let elapsed = Instant::now().elapsed().as_secs_f32();
-      // let opacity = if (elapsed as usize + model_index) % 5 == 0 {
-      //   ((elapsed.fract() - 0.5) * 2.0).abs()
-      // } else {
-      //   1.0
-      // };
-
-      let opacity_bytes = &opacity.to_ne_bytes()[..];
-
-      self.device.cmd_push_constants(
-        command_buffer,
-        self.data.pipeline_layout,
-        vk::ShaderStageFlags::VERTEX,
-        0,
-        model_bytes,
-      );
-
-      self.device.cmd_push_constants(
-        command_buffer,
-        self.data.pipeline_layout,
-        vk::ShaderStageFlags::FRAGMENT,
-        64,
-        opacity_bytes,
-      );
-
-      self.data.model.render( &self.device, command_buffer );
-    //
+    model.render( &self.device, command_buffer );
 
     self.device.end_command_buffer( command_buffer )?;
 
@@ -533,15 +538,16 @@ impl Renderer {
 
 #[derive(Clone, Debug)]
 pub enum AppMode {
-  UNDETERMINATED,
-  INSTANCES_TEXTURED_LIGHTED,
-  INSTANCES_UNTEXTURED_UNLIGHTED,
-  VOXELS,
+  Undeterminated,
+  InstancesTexturedLighted,
+  InstancesUntexturedUnlighted,
+  Model,
+  Voxels,
 }
 
 impl Default for AppMode {
   fn default() -> Self {
-      AppMode::UNDETERMINATED
+      AppMode::Undeterminated
   }
 }
 
@@ -1198,7 +1204,7 @@ unsafe fn create_descriptor_sets( device:&Device, data:&mut AppData ) -> Result<
       .dst_set( data.descriptor_sets[ i ] )
       .dst_binding( 0 )
       .dst_array_element( 0 )
-      .descriptor_type( vk::DescriptorType::UNIFORM_BUFFER)
+      .descriptor_type( vk::DescriptorType::UNIFORM_BUFFER )
       .buffer_info( buffer_info );
 
     device.update_descriptor_sets( &[ ubo_write ], &[] as &[ vk::CopyDescriptorSet ] );

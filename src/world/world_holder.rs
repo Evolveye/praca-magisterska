@@ -1,5 +1,7 @@
 use std::rc::Rc;
 
+pub type Coordinate = u32;
+
 #[derive(Debug)]
 pub struct Material {
     pub _density: u32
@@ -24,18 +26,18 @@ pub struct Voxel {
 }
 
 pub trait WorldHolder {
-    fn get_voxel( &self, x:u32, y:u32, z:u32 ) -> Option<Rc<Voxel>>;
+    fn get_voxel( &self, x:Coordinate, y:Coordinate, z:Coordinate ) -> Option<Rc<Voxel>>;
 
-    fn set_voxel( &mut self, x:u32, y:u32, z:u32, voxel:Option<Rc<Voxel>> );
-    fn fill_voxels( &mut self, from:(u32, u32, u32), to:(u32, u32, u32), voxel:Option<Rc<Voxel>> );
+    fn set_voxel( &mut self, x:Coordinate, y:Coordinate, z:Coordinate, voxel:Option<Rc<Voxel>> );
+    fn fill_voxels( &mut self, from:(Coordinate, Coordinate, Coordinate), to:(Coordinate, Coordinate, Coordinate), voxel:Option<Rc<Voxel>> );
 
     fn get_size( &self );
     fn get_bytes_with_prefixes( &self, bytes:usize ) -> String {
-      match bytes {
-        size if size / 1024 / 1024 / 1024 > 0 => format!( "{size} B = {} KiB = {} MiB = {} GiB", size / 1024, size / 1024 / 1024, size / 1024 / 1024 / 1024 ),
-        size if size / 1024 / 1024 > 0 => format!( "{size} B = {} KiB = {} MiB", size / 1024, size / 1024 / 1024 ),
-        size if size / 1024 > 0 => format!( "{size} B = {} KiB", size / 1024 ),
-        size => format!( "{size} B" ),
-      }
+        match bytes {
+            size if size / 1024 / 1024 / 1024 > 0 => format!( "{size} B = {} KiB = {} MiB = {} GiB", size / 1024, size / 1024 / 1024, size / 1024 / 1024 / 1024 ),
+            size if size / 1024 / 1024 > 0 => format!( "{size} B = {} KiB = {} MiB", size / 1024, size / 1024 / 1024 ),
+            size if size / 1024 > 0 => format!( "{size} B = {} KiB", size / 1024 ),
+            size => format!( "{size} B" ),
+        }
     }
 }

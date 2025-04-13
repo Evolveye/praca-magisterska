@@ -7,6 +7,8 @@ use winit::{
   keyboard::{ PhysicalKey, KeyCode },
 };
 
+use crate::{rendering::model::Model, world::world_renderer::WorldRenderer};
+
 use super::{
   rendering::renderer::Renderer,
   window_manager::WindowManager,
@@ -103,6 +105,8 @@ impl AppSettings {
 pub struct Simulation {
   renderer: Renderer,
   window_manager: WindowManager,
+  world_renderer: WorldRenderer,
+  // model: Model,
   // world: world::World,
   settings: AppSettings,
   control_manager: ControlManager,
@@ -120,11 +124,14 @@ impl Simulation {
     let window_manager = WindowManager::new()?;
     let mut renderer = unsafe { Renderer::create( &window_manager.window )? };
 
-    unsafe { renderer.load_cube()?; }
+    let mut world_renderer = WorldRenderer::new( &renderer );
+    unsafe { world_renderer.model.update_unstances_buffer_with_defaults( &renderer, 19 ) }?;
 
     Ok( Simulation {
       window_manager,
       renderer,
+      world_renderer,
+      // model,
       // world: world::World::new(),
       control_manager: ControlManager::new( point3( 0.0, 20.0, -35.0 ), point3( 0.0, 0.0, -8.0 ) ),
       settings: AppSettings::new(),
@@ -170,7 +177,7 @@ impl Simulation {
 
             self.control_manager.update( &self.settings, time_delta.as_secs_f32() );
             let view_matrix = self.control_manager.get_view_matrix();
-            unsafe { self.renderer.render( window_manager, view_matrix ) }.unwrap();
+            unsafe { self.renderer.render( window_manager, view_matrix, vec![ &self.world_renderer ] ) }.unwrap();
           },
 
           WindowEvent::Resized( size ) => {
@@ -188,7 +195,8 @@ impl Simulation {
 
           WindowEvent::CloseRequested => {
             elwt.exit();
-            unsafe { self.renderer.destroy(); }
+            Simulation::destroy( &mut self.renderer, &mut self.world_renderer );
+            println!( "App uptime = {:?}", self.start_time.elapsed() );
           }
 
           WindowEvent::KeyboardInput { event, .. } => {
@@ -204,9 +212,10 @@ impl Simulation {
               PhysicalKey::Code( KeyCode::ArrowDown  ) | PhysicalKey::Code( KeyCode::KeyS ) => self.control_manager.velocity_backward = if pressed { speed } else { 0.0 },
               PhysicalKey::Code( KeyCode::Escape ) => {
                 elwt.exit();
-                unsafe { self.renderer.destroy(); }
+                Simulation::destroy( &mut self.renderer, &mut self.world_renderer );
+                println!( "App uptime = {:?}", self.start_time.elapsed() );
               }
-              _ => { }
+              _ => {}
             }
           }
 
@@ -223,5 +232,15 @@ impl Simulation {
         _ => {}
       }
     } ).unwrap();
+  }
+
+  // fn destroy( renderer_ptr:*mut Renderer, world_renderer_ptr:*mut WorldRenderer, model_ptr:*mut Model ) {
+  fn destroy( renderer_ptr:*mut Renderer, world_renderer_ptr:*mut WorldRenderer ) {
+    unsafe {
+      (*renderer_ptr).device_wait_idle();
+      (*world_renderer_ptr).model.destroy( &(*renderer_ptr).device );
+      // (*model_ptr).destroy( &(*renderer_ptr).device );
+      (*renderer_ptr).destroy();
+    }
   }
 }

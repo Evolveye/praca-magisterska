@@ -1,11 +1,7 @@
 use vulkanalia::bytecode::Bytecode;
 use vulkanalia::prelude::v1_0::*;
 use anyhow::Result;
-
-use crate::world::world_holder::Voxel;
-
-use super::model::ModelInstance;
-use super::vertex::{ RendererModelDescriptions, Vertex };
+use super::vertex::RendererModelDescriptions;
 use super::renderer::{AppData, AppMode};
 
 unsafe fn create_shader_module( device:&Device, bytecode:&[u8] ) -> Result<vk::ShaderModule> {
@@ -113,10 +109,14 @@ pub unsafe fn create_pipeline_for_model<T:RendererModelDescriptions>( device:&De
     .offset( 64 )
     .size( 4 );
 
-  let set_layouts = &[ data.uniform_descriptor_set_layout, data.texture_descriptor_set_layout ];
+  let set_layouts = match data.mode {
+    AppMode::Voxels => vec![ data.uniform_descriptor_set_layout ],
+    _ => vec![ data.uniform_descriptor_set_layout, data.texture_descriptor_set_layout ],
+  };
+
   let push_constant_ranges = &[ vert_push_constant_range, frag_push_constant_range ];
   let layout_info = vk::PipelineLayoutCreateInfo::builder()
-    .set_layouts( set_layouts )
+    .set_layouts( &set_layouts )
     .push_constant_ranges( push_constant_ranges );
 
   data.pipeline_layout = device.create_pipeline_layout( &layout_info, None )?;
@@ -147,17 +147,17 @@ pub unsafe fn create_pipeline_for_model<T:RendererModelDescriptions>( device:&De
 
 pub unsafe fn create_pipeline_for_instances<T:RendererModelDescriptions>( device:&Device, data:&mut AppData ) -> Result<()> {
   let ( (vert_shader_module, vert_stage), (frag_shader_module, frag_stage) ) = match data.mode {
-    AppMode::VOXELS => (
+    AppMode::Voxels => (
       create_shader_stage( device, include_bytes!( "./shaders/voxels/vert.spv" ), vk::ShaderStageFlags::VERTEX )?,
       create_shader_stage( device, include_bytes!( "./shaders/voxels/frag.spv" ), vk::ShaderStageFlags::FRAGMENT )?
     ),
 
-    AppMode::INSTANCES_TEXTURED_LIGHTED => (
+    AppMode::InstancesTexturedLighted => (
       create_shader_stage( device, include_bytes!( "./shaders/instances-textured-lighted/vert.spv" ), vk::ShaderStageFlags::VERTEX )?,
       create_shader_stage( device, include_bytes!( "./shaders/instances-textured-lighted/frag.spv" ), vk::ShaderStageFlags::FRAGMENT )?
     ),
 
-    AppMode::INSTANCES_UNTEXTURED_UNLIGHTED => (
+    AppMode::InstancesUntexturedUnlighted => (
       create_shader_stage( device, include_bytes!( "./shaders/instances-untextured-unlighted/vert.spv" ), vk::ShaderStageFlags::VERTEX )?,
       create_shader_stage( device, include_bytes!( "./shaders/instances-untextured-unlighted/frag.spv" ), vk::ShaderStageFlags::FRAGMENT )?
     ),

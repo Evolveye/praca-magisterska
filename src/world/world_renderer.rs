@@ -1,22 +1,33 @@
-use cgmath::{ vec2, vec3, Vector3 };
 use vulkanalia::prelude::v1_0::*;
 use vulkanalia::vk;
-
-use crate::rendering::vertex::{RendererModelDescriptions, Vertex};
-
+use crate::rendering::{model::{Model, BOX_INDICES, BOX_VERTICES}, renderer::Renderer, vertex::{Renderable, RendererModelDescriptions, Vec3, Vertex}};
 use super::world_holder::Voxel;
 
-type Vec2 = cgmath::Vector2<f32>;
-type Vec3 = cgmath::Vector3<f32>;
 
-pub trait WorldRenderer {
-    fn render_world( &self );
+pub struct WorldRenderer {
+    pub model: Model
+}
+
+impl WorldRenderer {
+    pub fn new( renderer:&Renderer ) -> Self {
+        Self {
+            model: unsafe {
+                Model::new::<Voxel>( renderer, BOX_VERTICES.to_vec(), BOX_INDICES.to_vec() ).unwrap()
+            },
+        }
+    }
+}
+
+impl Renderable for WorldRenderer {
+    unsafe fn render( &self, device:&Device, command_buffer:vk::CommandBuffer ) {
+        self.model.render( device, command_buffer );
+    }
 }
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct VoxelInstance {
-  pub translate: Vec3
+    pub translate: Vec3
 }
 
 impl RendererModelDescriptions for Voxel {
