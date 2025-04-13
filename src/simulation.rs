@@ -7,7 +7,10 @@ use winit::{
   keyboard::{ PhysicalKey, KeyCode },
 };
 
-use crate::{rendering::model::Model, world::world_renderer::WorldRenderer};
+use crate::world::{
+  world_holder::WorldHolder,
+  world_renderer::WorldRenderer
+};
 
 use super::{
   rendering::renderer::Renderer,
@@ -122,10 +125,8 @@ impl Simulation {
     pretty_env_logger::init();
 
     let window_manager = WindowManager::new()?;
-    let mut renderer = unsafe { Renderer::create( &window_manager.window )? };
-
-    let mut world_renderer = WorldRenderer::new( &renderer );
-    unsafe { world_renderer.model.update_unstances_buffer_with_defaults( &renderer, 19 ) }?;
+    let renderer = unsafe { Renderer::create( &window_manager.window )? };
+    let world_renderer = WorldRenderer::new( &renderer );
 
     Ok( Simulation {
       window_manager,
@@ -141,6 +142,18 @@ impl Simulation {
       fps_time: Instant::now(),
       fps_count: 0,
     } )
+  }
+
+  pub fn update_instances_with_defaults( &mut self ) {
+    unsafe { self.world_renderer.model.update_instances_buffer_with_defaults( &self.renderer, 19 ).unwrap() };
+  }
+
+  pub fn update_instances_with_world_holder( &mut self, world_holder:impl WorldHolder ) {
+    self.world_renderer.update_instances_buffer( &self.renderer, &world_holder );
+  }
+
+  pub fn move_camera_to( &mut self, vec:Point3<f32> ) {
+    self.control_manager.position = vec;
   }
 
   pub fn run_window_event_loop( &mut self ) {

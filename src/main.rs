@@ -9,14 +9,14 @@ use image::{GrayImage, Luma};
 use simulation::Simulation;
 use std::path::Path;
 use noise::{generate_simplex_noise_image, generate_simplex_noise_image_with_octaves};
-use structure_tests::{octree::Octree, run_test, tester::{self, Tester}};
+use structure_tests::{octree::Octree, generate_world, tester::{self, Tester}};
 
 const WIDTH: u32 = 1024 * 4;
 const HEIGHT: u32 = 1024 * 4;
 
 fn main() {
     render_world();
-    // run_test();
+    // generate_world();
     // let mut world_struct = Octree::new( 18 );
     // let dataset = Tester::fill_50pc_realistically( &mut world_struct );
     // generate_img();
@@ -36,5 +36,7 @@ fn generate_img() {
 
 fn render_world() {
     let mut simulation = Simulation::new().unwrap();
+    // simulation.update_instances_with_defaults();
+    simulation.update_instances_with_world_holder( generate_world() );
     simulation.run_window_event_loop();
 }

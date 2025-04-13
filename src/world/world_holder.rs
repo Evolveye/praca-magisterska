@@ -6,11 +6,13 @@ pub type Coordinate = u32;
 pub struct Material {
     pub _density: u32
 }
-#[derive(Debug)]
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Color {
-    pub _red: u8,
-    pub _green: u8,
-    pub _blue: u8,
+    pub red: u8,
+    pub green: u8,
+    pub blue: u8,
 }
 
 #[derive(Debug)]
@@ -27,6 +29,7 @@ pub struct Voxel {
 
 pub trait WorldHolder {
     fn get_voxel( &self, x:Coordinate, y:Coordinate, z:Coordinate ) -> Option<Rc<Voxel>>;
+    fn get_all_voxels( &self ) -> Vec<(u32, u32, u32, Rc<Voxel>)>;
 
     fn set_voxel( &mut self, x:Coordinate, y:Coordinate, z:Coordinate, voxel:Option<Rc<Voxel>> );
     fn fill_voxels( &mut self, from:(Coordinate, Coordinate, Coordinate), to:(Coordinate, Coordinate, Coordinate), voxel:Option<Rc<Voxel>> );

@@ -53,6 +53,10 @@ impl WorldHolder for VoxelHashMap<Voxel> {
         }
     }
 
+    fn get_all_voxels( &self ) -> Vec<(u32, u32, u32, Rc<Voxel>)> {
+        todo!()
+    }
+
     fn set_voxel( &mut self, x:u32, y:u32, z:u32, voxel:Option<Rc<Voxel>> ) {
         let pos = Position { x, y, z };
 

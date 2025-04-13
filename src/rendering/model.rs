@@ -56,8 +56,8 @@ pub const BOX_INDICES:&[ u32 ] = &[
 
 #[derive(Clone, Debug, Default)]
 #[allow(dead_code)]
-pub struct Model {
-  pub vertices: Vec<Vertex>,
+pub struct Model<TVertex> {
+  pub vertices: Vec<TVertex>,
   pub indices: Vec<u32>,
   pub vertex_buffer: vk::Buffer,
   pub vertex_buffer_memory: vk::DeviceMemory,
@@ -68,11 +68,10 @@ pub struct Model {
   pub instance_buffer_memory: vk::DeviceMemory,
 }
 
-impl Model {
-  pub unsafe fn new<TInstance>( renderer:&Renderer, vertices:Vec<Vertex>, indices:Vec<u32> ) -> Result<Self> {
-    let ( index_buffer, index_buffer_memory ) = Model::create_index_buffer( renderer, &indices )?;
-    let ( vertex_buffer, vertex_buffer_memory ) = Model::create_vertex_buffer( renderer, &vertices )?;
-    // let ( instance_buffer, instance_buffer_memory ) = Model::create_instance_buffer::<TInstance>( renderer, vec![] )?;
+impl<TVertex> Model<TVertex> {
+  pub unsafe fn new( renderer:&Renderer, vertices:Vec<TVertex>, indices:Vec<u32> ) -> Result<Self> {
+    let ( index_buffer, index_buffer_memory ) = Model::<TVertex>::create_index_buffer( renderer, &indices )?;
+    let ( vertex_buffer, vertex_buffer_memory ) = Model::<TVertex>::create_vertex_buffer( renderer, &vertices )?;
 
     Ok( Self {
       vertices,
@@ -87,8 +86,173 @@ impl Model {
     } )
   }
 
+  unsafe fn create_index_buffer( renderer:&Renderer, indices:&Vec<u32> ) -> Result<( vk::Buffer, vk::DeviceMemory )> {
+    let Renderer { ref instance, ref device, ref data, .. } = renderer;
+
+    let size = (size_of::<u32>() * indices.len()) as u64;
+    let ( staging_buffer, staging_buffer_memory ) = create_buffer(
+      instance,
+      device,
+      data.physical_device,
+      size,
+      vk::BufferUsageFlags::TRANSFER_SRC,
+      vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
+    )?;
+
+    let memory = device.map_memory( staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
+
+    memcpy( indices.as_ptr(), memory.cast(), indices.len() );
+    device.unmap_memory( staging_buffer_memory );
+
+    let ( index_buffer, index_buffer_memory ) = create_buffer(
+      instance,
+      device,
+      data.physical_device,
+      size,
+      vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
+      vk::MemoryPropertyFlags::DEVICE_LOCAL
+    )?;
+
+    copy_buffer( device, data.command_pool, data.graphics_queue, staging_buffer, index_buffer, size )?;
+
+    device.destroy_buffer( staging_buffer, None );
+    device.free_memory( staging_buffer_memory, None );
+
+    Ok(( index_buffer, index_buffer_memory ))
+  }
+
+  unsafe fn create_vertex_buffer( renderer:&Renderer, vertices:&Vec<TVertex> ) -> Result<( vk::Buffer, vk::DeviceMemory )> {
+    let Renderer { ref instance, ref device, ref data, .. } = renderer;
+
+    let size = (size_of::<TVertex>() * vertices.len()) as u64;
+    let ( staging_buffer, staging_buffer_memory ) = create_buffer(
+      instance,
+      device,
+      data.physical_device,
+      size,
+      vk::BufferUsageFlags::TRANSFER_SRC,
+      vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
+    )?;
+
+    let memory = device.map_memory( staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
+
+    memcpy( vertices.as_ptr(), memory.cast(), vertices.len() );
+    device.unmap_memory( staging_buffer_memory );
+
+    let ( vertex_buffer, vertex_buffer_memory ) = create_buffer(
+      instance,
+      device,
+      data.physical_device,
+      size,
+      vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
+      vk::MemoryPropertyFlags::DEVICE_LOCAL,
+    )?;
+
+    copy_buffer( device, data.command_pool, data.graphics_queue, staging_buffer, vertex_buffer, size )?;
+
+    device.destroy_buffer( staging_buffer, None );
+    device.free_memory( staging_buffer_memory, None );
+
+    Ok(( vertex_buffer, vertex_buffer_memory ))
+  }
+
+  pub unsafe fn create_instance_buffer<T>( renderer:&Renderer, instances_data:Vec<T> ) -> Result<( vk::Buffer, vk::DeviceMemory )> {
+    let Renderer { ref instance, ref device, ref data, .. } = renderer;
+
+    let size = (size_of::<T>() * instances_data.len() as usize) as u64;
+    let ( staging_buffer, staging_buffer_memory ) = create_buffer(
+      instance,
+      device,
+      data.physical_device,
+      size,
+      vk::BufferUsageFlags::TRANSFER_SRC,
+      vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
+    )?;
+
+    let memory = device.map_memory( staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
+
+    memcpy( instances_data.as_ptr(), memory.cast(), instances_data.len() as usize );
+    device.unmap_memory( staging_buffer_memory );
+
+    let ( instance_buffer, instance_buffer_memory ) = create_buffer(
+      instance,
+      device,
+      data.physical_device,
+      size,
+      vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
+      vk::MemoryPropertyFlags::DEVICE_LOCAL,
+    )?;
+
+    copy_buffer( device, data.command_pool, data.graphics_queue, staging_buffer, instance_buffer, size )?;
+
+    device.destroy_buffer( staging_buffer, None );
+    device.free_memory( staging_buffer_memory, None );
+
+    Ok(( instance_buffer, instance_buffer_memory ))
+  }
+
+  pub unsafe fn update_instances_buffer_with_defaults( &mut self, renderer:&Renderer, instances_count:u32 ) -> Result<()> {
+    let instances_data = (0..instances_count).map( |model_index| {
+        // // RING
+        // let radius = 10.0;
+        // let theta = 2.0 * std::f32::consts::PI * (model_index as f32) / (instances_count as f32);
+        // let x = radius * theta.cos();
+        // let z = radius * theta.sin();
+        // let translate = Vector3::new( x, 0.0, z );
+        // ModelInstance { translate }
+
+        let side_size = 50;
+        let x = (model_index % side_size) as f32;
+        let y = (model_index / (side_size * side_size)) as f32;
+        let z = ((model_index / side_size) % side_size) as f32;
+        let translate = Vector3::new( x, y, z );
+        ModelInstance { translate }
+    } ).collect::<Vec<ModelInstance>>();
+
+    self.update_instances_buffer( renderer, instances_data )
+  }
+
+  pub unsafe fn update_instances_buffer<T>( &mut self, renderer:&Renderer, instances_data:Vec<T> ) -> Result<()> {
+    let instances_count = instances_data.len() as u32;
+    let ( instance_buffer, instance_buffer_memory ) = Model::<TVertex>::create_instance_buffer::<T>( renderer, instances_data )?;
+
+    self.instance_buffer = instance_buffer;
+    self.instance_buffer_memory = instance_buffer_memory;
+    self.instances_count = instances_count;
+
+    Ok(())
+  }
+
+  pub unsafe fn destroy( &self, device:&Device ) {
+    device.destroy_buffer( self.vertex_buffer, None );
+    device.free_memory( self.vertex_buffer_memory, None );
+
+    device.destroy_buffer( self.index_buffer, None );
+    device.free_memory( self.index_buffer_memory, None );
+
+    device.destroy_buffer( self.instance_buffer, None );
+    device.free_memory( self.instance_buffer_memory, None );
+  }
+}
+
+impl<TVertex> Renderable for Model<TVertex> {
+  unsafe fn render( &self, device:&Device, command_buffer:vk::CommandBuffer ) {
+    device.cmd_bind_vertex_buffers( command_buffer, 0, &[ self.vertex_buffer, self.instance_buffer ], &[ 0, 0 ] );
+    device.cmd_bind_index_buffer( command_buffer, self.index_buffer, 0, vk::IndexType::UINT32 );
+    device.cmd_draw_indexed( command_buffer, self.indices.len() as u32, self.instances_count, 0, 0, 0 );
+  }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct ModelInstance {
+  pub translate: Vec3,
+}
+
+
+impl Model<Vertex> {
   pub unsafe fn new_cube( renderer:&Renderer ) -> Result<Self> {
-    Model::new::<ModelInstance>(
+    Model::new(
       renderer,
       BOX_VERTICES.to_vec(),
       BOX_INDICES.to_vec(),
@@ -161,173 +325,11 @@ impl Model {
       }
     }
 
-    Model::new::<ModelInstance>( renderer, vertices, indices )
-  }
-
-  unsafe fn create_index_buffer( renderer:&Renderer, indices:&Vec<u32> ) -> Result<( vk::Buffer, vk::DeviceMemory )> {
-    let Renderer { ref instance, ref device, ref data, .. } = renderer;
-
-    let size = (size_of::<u32>() * indices.len()) as u64;
-    let ( staging_buffer, staging_buffer_memory ) = create_buffer(
-      instance,
-      device,
-      data.physical_device,
-      size,
-      vk::BufferUsageFlags::TRANSFER_SRC,
-      vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-    )?;
-
-    let memory = device.map_memory( staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
-
-    memcpy( indices.as_ptr(), memory.cast(), indices.len() );
-    device.unmap_memory( staging_buffer_memory );
-
-    let ( index_buffer, index_buffer_memory ) = create_buffer(
-      instance,
-      device,
-      data.physical_device,
-      size,
-      vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
-      vk::MemoryPropertyFlags::DEVICE_LOCAL
-    )?;
-
-    copy_buffer( device, data.command_pool, data.graphics_queue, staging_buffer, index_buffer, size )?;
-
-    device.destroy_buffer( staging_buffer, None );
-    device.free_memory( staging_buffer_memory, None );
-
-    Ok(( index_buffer, index_buffer_memory ))
-  }
-
-  unsafe fn create_vertex_buffer( renderer:&Renderer, vertices:&Vec<Vertex> ) -> Result<( vk::Buffer, vk::DeviceMemory )> {
-    let Renderer { ref instance, ref device, ref data, .. } = renderer;
-
-    let size = (size_of::<Vertex>() * vertices.len()) as u64;
-    let ( staging_buffer, staging_buffer_memory ) = create_buffer(
-      instance,
-      device,
-      data.physical_device,
-      size,
-      vk::BufferUsageFlags::TRANSFER_SRC,
-      vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-    )?;
-
-    let memory = device.map_memory( staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
-
-    memcpy( vertices.as_ptr(), memory.cast(), vertices.len() );
-    device.unmap_memory( staging_buffer_memory );
-
-    let ( vertex_buffer, vertex_buffer_memory ) = create_buffer(
-      instance,
-      device,
-      data.physical_device,
-      size,
-      vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
-      vk::MemoryPropertyFlags::DEVICE_LOCAL,
-    )?;
-
-    copy_buffer( device, data.command_pool, data.graphics_queue, staging_buffer, vertex_buffer, size )?;
-
-    device.destroy_buffer( staging_buffer, None );
-    device.free_memory( staging_buffer_memory, None );
-
-    Ok(( vertex_buffer, vertex_buffer_memory ))
-  }
-
-  pub unsafe fn create_instance_buffer<T>( renderer:&Renderer, instances_data:Vec<T> ) -> Result<( vk::Buffer, vk::DeviceMemory )> {
-    let Renderer { ref instance, ref device, ref data, .. } = renderer;
-
-    let size = (size_of::<T>() * instances_data.len() as usize) as u64;
-    let ( staging_buffer, staging_buffer_memory ) = create_buffer(
-      instance,
-      device,
-      data.physical_device,
-      size,
-      vk::BufferUsageFlags::TRANSFER_SRC,
-      vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-    )?;
-
-    let memory = device.map_memory( staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
-
-    memcpy( instances_data.as_ptr(), memory.cast(), instances_data.len() as usize );
-    device.unmap_memory( staging_buffer_memory );
-
-    let ( instance_buffer, instance_buffer_memory ) = create_buffer(
-      instance,
-      device,
-      data.physical_device,
-      size,
-      vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
-      vk::MemoryPropertyFlags::DEVICE_LOCAL,
-    )?;
-
-    copy_buffer( device, data.command_pool, data.graphics_queue, staging_buffer, instance_buffer, size )?;
-
-    device.destroy_buffer( staging_buffer, None );
-    device.free_memory( staging_buffer_memory, None );
-
-    Ok(( instance_buffer, instance_buffer_memory ))
-  }
-
-  pub unsafe fn update_unstances_buffer_with_defaults( &mut self, renderer:&Renderer, instances_count:u32 ) -> Result<()> {
-    let instances_data = (0..instances_count).map( |model_index| {
-        // // RING
-        // let radius = 10.0;
-        // let theta = 2.0 * std::f32::consts::PI * (model_index as f32) / (instances_count as f32);
-        // let x = radius * theta.cos();
-        // let z = radius * theta.sin();
-        // let translate = Vector3::new( x, 0.0, z );
-        // ModelInstance { translate }
-
-        let side_size = 50;
-        let x = (model_index % side_size) as f32;
-        let y = (model_index / (side_size * side_size)) as f32;
-        let z = ((model_index / side_size) % side_size) as f32;
-        let translate = Vector3::new( x, y, z );
-        ModelInstance { translate }
-    } ).collect::<Vec<ModelInstance>>();
-
-    let ( instance_buffer, instance_buffer_memory ) = Model::create_instance_buffer::<ModelInstance>( renderer, instances_data )?;
-
-    self.instance_buffer = instance_buffer;
-    self.instance_buffer_memory = instance_buffer_memory;
-    self.instances_count = instances_count;
-
-    Ok(())
-  }
-
-  pub unsafe fn destroy( &self, device:&Device ) {
-    device.destroy_buffer( self.vertex_buffer, None );
-    device.free_memory( self.vertex_buffer_memory, None );
-
-    device.destroy_buffer( self.index_buffer, None );
-    device.free_memory( self.index_buffer_memory, None );
-
-    device.destroy_buffer( self.instance_buffer, None );
-    device.free_memory( self.instance_buffer_memory, None );
+    Model::<Vertex>::new( renderer, vertices, indices )
   }
 }
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug)]
-pub struct ModelInstance {
-  pub translate: Vec3
-}
-
-impl Renderable for Model {
-  // pub unsafe fn render( &self, device:&Device, command_buffer:vk::CommandBuffer ) {
-  //   device.cmd_bind_vertex_buffers( command_buffer, 0, &[ self.vertex_buffer ], &[ 0, 0 ] );
-  //   device.cmd_bind_index_buffer( command_buffer, self.index_buffer, 0, vk::IndexType::UINT32 );
-  //   device.cmd_draw_indexed( command_buffer, self.indices.len() as u32, 1, 0, 0, 0 );
-
-  unsafe fn render( &self, device:&Device, command_buffer:vk::CommandBuffer ) {
-    device.cmd_bind_vertex_buffers( command_buffer, 0, &[ self.vertex_buffer, self.instance_buffer ], &[ 0, 0 ] );
-    device.cmd_bind_index_buffer( command_buffer, self.index_buffer, 0, vk::IndexType::UINT32 );
-    device.cmd_draw_indexed( command_buffer, self.indices.len() as u32, self.instances_count, 0, 0, 0 );
-  }
-}
-
-impl RendererModelDescriptions for Model {
+impl RendererModelDescriptions for Model<Vertex> {
   fn binding_description() -> vk::VertexInputBindingDescription {
     vk::VertexInputBindingDescription::builder()
       .binding( 0 )

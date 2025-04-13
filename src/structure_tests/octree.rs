@@ -29,7 +29,6 @@ impl<T> OctreeNode<T> {
         }
     }
 
-
     fn fill_at(
         &mut self,
         depth: u8,
@@ -91,13 +90,44 @@ impl<T> OctreeNode<T> {
         }
     }
 
-
     fn get( &self, depth:u8, x:u32, y:u32, z:u32 ) -> Option<Rc<T>> {
         match self {
             OctreeNode::Leaf( value ) => value.clone(),
             OctreeNode::Branch( branch ) => {
                 let child_index = OctreeBranch::<T>::get_child_index( depth, x, y, z );
                 branch.children[ child_index ].get( depth - 1, x, y, z )
+            }
+        }
+    }
+
+    fn collect_voxels( &self, offset:(u32, u32, u32), depth:u8, out:&mut Vec<(u32, u32, u32, Rc<T>)> ) {
+        match self {
+            OctreeNode::Leaf(Some(voxel)) => {
+                let size = 1 << depth;
+                for x in 0..size {
+                    for y in 0..size {
+                        for z in 0..size {
+                            out.push((
+                                offset.0 + x,
+                                offset.1 + y,
+                                offset.2 + z,
+                                Rc::clone(voxel),
+                            ));
+                        }
+                    }
+                }
+            }
+            OctreeNode::Leaf(None) => {
+                // Pusty liść - nie dodajemy nic
+            }
+            OctreeNode::Branch(branch) => {
+                let child_size = 1 << (depth - 1);
+                for (i, child) in branch.children.iter().enumerate() {
+                    let dx = ((i >> 2) & 1) as u32 * child_size;
+                    let dy = ((i >> 1) & 1) as u32 * child_size;
+                    let dz = (i & 1) as u32 * child_size;
+                    child.collect_voxels( (offset.0 + dx, offset.1 + dy, offset.2 + dz), depth - 1, out );
+                }
             }
         }
     }
@@ -220,6 +250,12 @@ impl<T> Octree<T> {
         self.root.get( self.max_depth, x, y, z )
     }
 
+    pub fn get_voxels(&self) -> Vec<(u32, u32, u32, Rc<T>)> {
+        let mut result = Vec::new();
+        self.root.collect_voxels( (0, 0, 0), self.max_depth, &mut result );
+        result
+    }
+
     pub fn remove( &mut self, x:u32, y:u32, z:u32 ) -> Option<Rc<T>>{
         self.root.remove( self.max_depth, x, y, z )
     }
@@ -232,6 +268,10 @@ impl<T> Octree<T> {
 impl WorldHolder for Octree<Voxel> {
     fn get_voxel( &self, x:u32, y:u32, z:u32 ) -> Option<Rc<Voxel>> {
         self.get( x, y, z )
+    }
+
+    fn get_all_voxels( &self ) -> Vec<(u32, u32, u32, Rc<Voxel>)> {
+        self.get_voxels()
     }
 
     fn set_voxel( &mut self, x:u32, y:u32, z:u32, voxel:Option<Rc<Voxel>> ) {

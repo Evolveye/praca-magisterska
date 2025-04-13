@@ -22,7 +22,7 @@ use voxel_map::VoxelMap;
 
 use crate::world::world_holder::WorldHolder;
 
-pub fn run_test() {
+pub fn generate_world() -> impl WorldHolder {
     println!( "" );
     println!( "Starting tester" );
 
@@ -43,4 +43,6 @@ pub fn run_test() {
     println!( "" );
     println!( "Time duration = {:?}", time_duration );
     println!( "" );
+
+    world_struct
 }

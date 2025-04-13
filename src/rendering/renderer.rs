@@ -34,10 +34,12 @@ use super::model::Model;
 use super::buffer::*;
 use super::pipeline::{ create_pipeline_for_instances, create_pipeline_for_model };
 use super::texture::Texture;
-use super::vertex::Renderable;
+use super::vertex::{Renderable, Vertex};
 
 type Vec3 = cgmath::Vector3<f32>;
 type Mat4 = cgmath::Matrix4<f32>;
+
+type VertexModel = Model::<Vertex>;
 pub type ModelRegistrar = fn(usize) -> Result<Vec<vk::CommandBuffer>>;
 
 const PORTABILITY_MACOS_VERSION:Version = Version::new( 1, 3, 216 );
@@ -80,9 +82,9 @@ impl Renderer {
     create_descriptor_set_layout( &device, &mut data )?;
 
     match data.mode {
-      AppMode::Model => create_pipeline_for_model::<Model>( &device, &mut data )?,
+      AppMode::Model => create_pipeline_for_model::<VertexModel>( &device, &mut data )?,
       AppMode::Voxels => create_pipeline_for_instances::<Voxel>( &device, &mut data )?,
-      _ => create_pipeline_for_instances::<Model>( &device, &mut data )?,
+      _ => create_pipeline_for_instances::<VertexModel>( &device, &mut data )?,
     }
 
     // create_pipeline_for_model( &device, &mut data )?;
@@ -123,17 +125,16 @@ impl Renderer {
   }
 
 
-  pub unsafe fn load_cube( &mut self ) -> Result<Model> {
-    self.data.model = Model::new_cube( &self )?;
+  pub unsafe fn load_cube( &mut self ) -> Result<VertexModel> {
+    let model = VertexModel::new_cube( &self )?;
     self.data.texture = Texture::load( &self.instance, &self.device, &self.data, "src/rendering/resources/uv_map.png" )?;
 
-    Ok( self.data.model.clone() )
+    Ok( model.clone() )
   }
 
-  pub unsafe fn load_model_with_texture( &mut self, model:Model, texture:Texture ) -> Result<()> {
+  pub unsafe fn load_model_with_texture( &mut self, model:VertexModel, texture:Texture ) -> Result<()> {
     let Renderer { ref mut data, .. } = self;
 
-    data.model = model;
     data.texture = texture;
 
     Ok(())
@@ -149,7 +150,7 @@ impl Renderer {
     // load_model( data, "src/rendering/resources/viking_room.obj" )?;
     // load_model( data, "src/rendering/resources/bunny.obj" )?;
 
-    self.data.model = Model::from_file( &self, model_src )?;
+    let model = VertexModel::from_file( &self, model_src )?;
 
     self.data.texture = Texture::load( &self.instance, &self.device, &self.data, texture_src )?;
     // load_model( data, "src/rendering/resources/barrel.obj" )?;
@@ -221,9 +222,9 @@ impl Renderer {
     create_render_pass( &self.instance, &self.device, &mut self.data )?;
 
     match self.data.mode {
-      AppMode::Model => create_pipeline_for_model::<Model>( &self.device, &mut self.data )?,
+      AppMode::Model => create_pipeline_for_model::<VertexModel>( &self.device, &mut self.data )?,
       AppMode::Voxels => create_pipeline_for_instances::<Voxel>( &self.device, &mut self.data )?,
-      _ => create_pipeline_for_instances::<Model>( &self.device, &mut self.data )?,
+      _ => create_pipeline_for_instances::<VertexModel>( &self.device, &mut self.data )?,
     }
 
     create_color_objects( &self.instance, &self.device, &mut self.data )?;
@@ -360,7 +361,7 @@ impl Renderer {
       Deg( 45.0 ),
       self.data.swapchain_extent.width as f32 / self.data.swapchain_extent.height as f32,
       0.1,
-      100.0,
+      400.0,
     );
 
     let ubo = UniformBufferObject { view:view_matrix, proj };
@@ -581,29 +582,17 @@ pub struct AppData {
   pub render_finished_semaphores: Vec<vk::Semaphore>,
   pub in_flight_fences: Vec<vk::Fence>,
   pub images_in_flight: Vec<vk::Fence>,
-  pub model: Model,
-  // pub vertices: Vec<Vertex>,
-  // pub indices: Vec<u32>,
-  // pub vertex_buffer: vk::Buffer,
-  // pub vertex_buffer_memory: vk::DeviceMemory,
   pub instances_count: usize,
   pub instance_buffer: vk::Buffer,
   pub instance_buffer_memory: vk::DeviceMemory,
-  // pub index_buffer: vk::Buffer,
-  // pub index_buffer_memory: vk::DeviceMemory,
   pub uniform_buffers: Vec<vk::Buffer>,
   pub uniform_buffers_memory: Vec<vk::DeviceMemory>,
   pub descriptor_pool: vk::DescriptorPool,
   pub descriptor_sets: Vec<vk::DescriptorSet>,
-  // pub mip_levels: u32,
   pub color_image: vk::Image,
   pub color_image_memory: vk::DeviceMemory,
   pub color_image_view: vk::ImageView,
   pub texture: Texture,
-  // pub texture_image: vk::Image,
-  // pub texture_image_memory: vk::DeviceMemory,
-  // pub texture_image_view: vk::ImageView,
-  // pub texture_sampler: vk::Sampler,
   pub depth_image: vk::Image,
   pub depth_image_memory: vk::DeviceMemory,
   pub depth_image_view: vk::ImageView,

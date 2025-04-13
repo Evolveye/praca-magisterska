@@ -4,7 +4,8 @@ use rand::seq::IteratorRandom;
 
 use crate::{noise::simplex_noise::SimplexNoise, world::world_holder::{Color, CommonVoxelData, Material, Voxel, WorldHolder}};
 
-pub const RENDER_DISTANCE:u32 = 32 * 16;
+// pub const RENDER_DISTANCE:u32 = 32 * 16;
+pub const RENDER_DISTANCE:u32 = 32 * 1;
 pub const WORLD_Z:u32 = RENDER_DISTANCE * 2 + 1;
 pub const WORLD_Y:u32 = 384;
 pub const WORLD_X:u32 = RENDER_DISTANCE * 2 + 1;
@@ -70,7 +71,7 @@ impl Tester {
         let key = String::from( "default" );
         let materials = HashMap::from([ (key.clone(), Rc::new( Material { _density:100 } )) ]);
 
-        let colors = HashMap::from([ (key.clone(), Rc::new( Color { _red:50, _green:100, _blue:200 } )) ]);
+        let colors = HashMap::from([ (key.clone(), Rc::new( Color { red:50, green:100, blue:200 } )) ]);
         let common_voxel_dataset = HashMap::from([ (key.clone(), Rc::new( CommonVoxelData {
             _material:materials.get( &key ).unwrap().clone(),
             _color:colors.get( &key ).unwrap().clone(),
@@ -131,7 +132,7 @@ impl Tester {
         let noise = SimplexNoise::new( 50 );
         let coal_key = String::from( "coal" );
 
-        dataset.colors.insert( coal_key.clone(), Rc::new( Color { _red:0, _green:0, _blue:0 } ) );
+        dataset.colors.insert( coal_key.clone(), Rc::new( Color { red:2, green:2, blue:2 } ) );
         dataset.materials.insert( coal_key.clone(), Rc::new( Material { _density:125 } ) );
 
         dataset.common_voxel_dataset.insert( coal_key.clone(), Rc::new( CommonVoxelData {
@@ -145,17 +146,17 @@ impl Tester {
         } ) );
 
         let coal = dataset.voxels.get( &coal_key ).unwrap().clone();
-        let n = WORLD_Z * (WORLD_Y / 2) * WORLD_X;
 
-        for num in 0..n {
-            let (x, y, z) = Self::get_3d_indices_from_n( num );
-            let noise_value = noise.noise3d( x as f64, y as f64, z as f64 );
+        for z in 0..WORLD_Z {
+            for y in (WORLD_Y / 2)..WORLD_Y {
+                for x in 0..WORLD_X {
+                    let noise_value = noise.noise3d( x as f64, y as f64, z as f64 );
 
-            if noise_value > 0.85 {
-                world_holder.set_voxel( x, y, z, Some( coal.clone() ) );
+                    if noise_value > 0.85 {
+                        world_holder.set_voxel( x, y, z, Some( coal.clone() ) );
+                    }
+                }
             }
-
-            Self::print_num( num, n );
         }
 
         dataset
@@ -169,7 +170,7 @@ impl Tester {
     fn set_n( n:u32, world_holder:&mut dyn WorldHolder ) -> TestDataset {
         let key = String::from( "default" );
         let materials = HashMap::from([ (key.clone(), Rc::new( Material { _density:100 } )) ]);
-        let colors = HashMap::from([ (key.clone(), Rc::new( Color { _red:50, _green:100, _blue:200 } )) ]);
+        let colors = HashMap::from([ (key.clone(), Rc::new( Color { red:50, green:100, blue:200 } )) ]);
 
         let common_voxel_dataset = HashMap::from([ (key.clone(), Rc::new( CommonVoxelData {
             _material:materials.get( &key ).unwrap().clone(),
@@ -197,7 +198,7 @@ impl Tester {
     fn set_n_random( n:u32, world_holder:&mut dyn WorldHolder ) -> TestDataset {
         let key = String::from( "default" );
         let materials = HashMap::from([ (key.clone(), Rc::new( Material { _density:100 } )) ]);
-        let colors = HashMap::from([ (key.clone(), Rc::new( Color { _red:50, _green:100, _blue:200 } )) ]);
+        let colors = HashMap::from([ (key.clone(), Rc::new( Color { red:50, green:100, blue:200 } )) ]);
 
         let common_voxel_dataset = HashMap::from([ (key.clone(), Rc::new( CommonVoxelData {
             _material:materials.get( &key ).unwrap().clone(),
@@ -237,7 +238,7 @@ impl Tester {
             let color = match colors.get( &color_key ) {
                 Some(color) => color,
                 None => {
-                    colors.insert( color_key.clone(), Rc::new( Color { _red: red, _blue: blue, _green: green } ) );
+                    colors.insert( color_key.clone(), Rc::new( Color { red, blue, green } ) );
                     colors.get( &color_key ).unwrap()
                 }
             };
@@ -281,7 +282,7 @@ impl Tester {
     fn fill( from:(u32, u32, u32), to:(u32, u32, u32), world_holder:&mut dyn WorldHolder ) -> TestDataset {
         let key = String::from( "default" );
         let materials = HashMap::from([ (key.clone(), Rc::new( Material { _density:100 } )) ]);
-        let colors = HashMap::from([ (key.clone(), Rc::new( Color { _red:50, _green:100, _blue:200 } )) ]);
+        let colors = HashMap::from([ (key.clone(), Rc::new( Color { red:50, green:50, blue:50 } )) ]);
 
         let common_voxel_dataset = HashMap::from([ (key.clone(), Rc::new( CommonVoxelData {
             _material:materials.get( &key ).unwrap().clone(),
