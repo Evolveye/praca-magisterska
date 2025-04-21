@@ -28,6 +28,10 @@ impl WorldHolder for VoxelMap {
         todo!()
     }
 
+    fn get_all_visible_voxels( &self ) -> Vec<(u32, u32, u32, Rc<Voxel>)> {
+        todo!()
+    }
+
     fn set_voxel( &mut self, x:u32, y:u32, z:u32, voxel:Option<Rc<Voxel>> ) {
         if self.data[z as usize][y as usize][x as usize].is_none() {
             if !voxel.is_none() {

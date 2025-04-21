@@ -34,6 +34,10 @@ impl WorldHolder for VoxelList {
         todo!()
     }
 
+    fn get_all_visible_voxels( &self ) -> Vec<(u32, u32, u32, Rc<Voxel>)> {
+        todo!()
+    }
+
     fn set_voxel( &mut self, x:u32, y:u32, z:u32, voxel:Option<Rc<Voxel>> ) {
         if let Some( voxel ) = voxel {
             match self.data.iter_mut().find( |v| v.x == x && v.y == y && v.z == z ) {

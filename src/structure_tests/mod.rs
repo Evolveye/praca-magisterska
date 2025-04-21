@@ -28,9 +28,11 @@ pub fn generate_world() -> impl WorldHolder {
 
     // let mut world_struct = VoxelMap::new();
     // let mut world_struct = VoxelList::new();
-    let mut world_struct = Octree::new( 18 );
+    let mut world_struct = Octree::new( 5 );
+    // let mut world_struct = Octree::new( 18 );
     // let mut world_struct = VoxelHashMap::new();
     let time_start = Instant::now();
+    // let dataset = Tester::set_1( &mut world_struct );
     let dataset = Tester::fill_50pc_realistically( &mut world_struct );
     let time_duration = time_start.elapsed();
 

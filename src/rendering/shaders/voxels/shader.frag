@@ -13,18 +13,19 @@ layout( location=4 ) in vec3 inPosModel;
 layout( location=0 ) out vec4 outColor;
 
 void main() {
-  outColor = vec4( inColor, 1.0 );
-	// vec3 N = normalize( inNormal );
+  // outColor = vec4( inColor, 1.0 );
+	vec3 N = normalize( inNormal );
 	// vec3 lightDir = normalize( inLightPos - inPos );
 	// float diffuse = max( dot( N, lightDir ), 0.0 );
-	// vec3 ambient = vec3( 0.02 ) * inColor;
+	vec3 ambient = vec3( 0.02 ) * inColor;
 
-  // // Ambient Occlusion — bazujące na lokalnej pozycji względem środka instancji
-	// float dist = length( inPosModel );           // odległość od środka sześcianu
-	// float maxDist = length( vec3( 0.5 ) );       // maksymalna odległość do narożnika
-	// float ao = 1.0 - smoothstep( 0.0, maxDist, dist ); // centrum jaśniejsze, narożniki ciemniejsze
-	// ao = mix( 0.1, 1.0, ao );                  // siła AO (ciemność krawędzi)
+  // Ambient Occlusion — bazujące na lokalnej pozycji względem środka instancji
+	float dist = length( inPosModel );           // odległość od środka sześcianu
+	float maxDist = length( vec3( 0.5 ) );       // maksymalna odległość do narożnika
+	float ao = 1.0 - smoothstep( 0.0, maxDist, dist ); // centrum jaśniejsze, narożniki ciemniejsze
+	ao = mix( 0.2, 1.0, ao );                  // siła AO (ciemność krawędzi)
 
+	vec3 finalColor = inColor * ao;
 	// vec3 finalColor = (ambient + diffuse) * inColor * ao;
-	// outColor = vec4( finalColor, pcs.opacity );
+	outColor = vec4( finalColor, pcs.opacity );
 }

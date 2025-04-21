@@ -2,12 +2,17 @@ use std::{cmp, collections::HashMap, rc::Rc};
 
 use rand::seq::IteratorRandom;
 
-use crate::{noise::simplex_noise::SimplexNoise, world::world_holder::{Color, CommonVoxelData, Material, Voxel, WorldHolder}};
+use crate::{
+    noise::simplex_noise::SimplexNoise, world::world_holder::{
+        Color, CommonVoxelData, Material, Voxel, WorldHolder
+    }
+};
 
 // pub const RENDER_DISTANCE:u32 = 32 * 16;
 pub const RENDER_DISTANCE:u32 = 32 * 1;
 pub const WORLD_Z:u32 = RENDER_DISTANCE * 2 + 1;
-pub const WORLD_Y:u32 = 384;
+pub const WORLD_Y:u32 = 32;
+// pub const WORLD_Y:u32 = 384;
 pub const WORLD_X:u32 = RENDER_DISTANCE * 2 + 1;
 
 pub struct TestDataset {
@@ -18,6 +23,13 @@ pub struct TestDataset {
 }
 
 impl TestDataset {
+    pub fn expand( &mut self, dataset:TestDataset ) {
+        self.materials.extend( dataset.materials );
+        self.colors.extend( dataset.colors );
+        self.common_voxel_dataset.extend( dataset.common_voxel_dataset );
+        self.voxels.extend( dataset.voxels );
+    }
+
     pub fn get_size( &self ) {
         println!( "TestDataset sizes (in bytes by default)" );
 
@@ -125,13 +137,24 @@ impl Tester {
     }
 
     pub fn fill_50pc_realistically( world_holder:&mut dyn WorldHolder ) -> TestDataset {
-        println!( "Filling base" );
-        let mut dataset = Self::fill( (0, WORLD_Y / 2, 0), (WORLD_Z, WORLD_Y, WORLD_X), world_holder );
-
-        println!( "Filling deposits" );
         let noise = SimplexNoise::new( 50 );
         let coal_key = String::from( "coal" );
+        let bedrock_key = String::from( "bedrock" );
+        let grass_color = Color { red:10, green:64, blue:10 };
+        let dirt_color = Color { red:100, green:60, blue:40 };
+        let bedrock_color = Color { red:15, green:15, blue:15 };
 
+        println!( "Filling base" );
+        let mut dataset = Self::fill( (0, 0, 0), (WORLD_Z, WORLD_Y / 2 - 3, WORLD_X), world_holder );
+        let dataset_dirt = Self::fill_with( (0, WORLD_Y / 2 - 2, 0), (WORLD_Z, WORLD_Y / 2 - 1, WORLD_X), world_holder, (String::from( "dirt" ), dirt_color) );
+        let dataset_grass = Self::fill_with( (0, WORLD_Y / 2, 0), (WORLD_Z, WORLD_Y / 2, WORLD_X), world_holder, (String::from( "grass" ), grass_color) );
+        let dataset_bedrock = Self::fill_with( (0, 0, 0), (WORLD_Z, 0, WORLD_X), world_holder, (bedrock_key.clone(), bedrock_color) );
+
+        dataset.expand( dataset_dirt );
+        dataset.expand( dataset_grass );
+        dataset.expand( dataset_bedrock );
+
+        println!( "Filling deposits" );
         dataset.colors.insert( coal_key.clone(), Rc::new( Color { red:2, green:2, blue:2 } ) );
         dataset.materials.insert( coal_key.clone(), Rc::new( Material { _density:125 } ) );
 
@@ -148,12 +171,26 @@ impl Tester {
         let coal = dataset.voxels.get( &coal_key ).unwrap().clone();
 
         for z in 0..WORLD_Z {
-            for y in (WORLD_Y / 2)..WORLD_Y {
+            for y in 1..(WORLD_Y / 2 - 5) {
                 for x in 0..WORLD_X {
                     let noise_value = noise.noise3d( x as f64, y as f64, z as f64 );
 
                     if noise_value > 0.85 {
                         world_holder.set_voxel( x, y, z, Some( coal.clone() ) );
+                    }
+                }
+            }
+        }
+
+        let bedrock = dataset.voxels.get( &bedrock_key ).unwrap().clone();
+
+        for z in 0..WORLD_Z {
+            for y in 1..3 {
+                for x in 0..WORLD_X {
+                    let noise_value = noise.noise3d( x as f64, y as f64, z as f64 );
+
+                    if noise_value > 0.8 / y as f64 {
+                        world_holder.set_voxel( x, 3 - y, z, Some( bedrock.clone() ) );
                     }
                 }
             }
@@ -279,26 +316,29 @@ impl Tester {
         TestDataset { materials, colors, common_voxel_dataset, voxels }
     }
 
-    fn fill( from:(u32, u32, u32), to:(u32, u32, u32), world_holder:&mut dyn WorldHolder ) -> TestDataset {
-        let key = String::from( "default" );
-        let materials = HashMap::from([ (key.clone(), Rc::new( Material { _density:100 } )) ]);
-        let colors = HashMap::from([ (key.clone(), Rc::new( Color { red:50, green:50, blue:50 } )) ]);
+    fn fill_with( from:(u32, u32, u32), to:(u32, u32, u32), world_holder:&mut dyn WorldHolder, setup:(String, Color) ) -> TestDataset {
+        let materials = HashMap::from([ (setup.0.clone(), Rc::new( Material { _density:100 } )) ]);
+        let colors = HashMap::from([ (setup.0.clone(), Rc::new( setup.1 )) ]);
 
-        let common_voxel_dataset = HashMap::from([ (key.clone(), Rc::new( CommonVoxelData {
-            _material:materials.get( &key ).unwrap().clone(),
-            _color:colors.get( &key ).unwrap().clone(),
+        let common_voxel_dataset = HashMap::from([ (setup.0.clone(), Rc::new( CommonVoxelData {
+            _material: materials.get( &setup.0 ).unwrap().clone(),
+            _color: colors.get( &setup.0 ).unwrap().clone(),
         } ) ) ]);
 
-        let voxels = HashMap::from([ (key.clone(), Rc::new( Voxel {
-            _common_data: common_voxel_dataset.get( &key ).unwrap().clone(),
+        let voxels = HashMap::from([ (setup.0.clone(), Rc::new( Voxel {
+            _common_data: common_voxel_dataset.get( &setup.0 ).unwrap().clone(),
             _individual_data: vec![],
         }) ) ]);
 
-        let voxel = voxels.get( &key ).unwrap();
+        let voxel = voxels.get( &setup.0 ).unwrap();
 
         world_holder.fill_voxels( from, to, Some( voxel.clone() ) );
 
-        TestDataset { materials, colors, common_voxel_dataset, voxels }
+        TestDataset { materials, colors:HashMap::new(), common_voxel_dataset, voxels }
+    }
+
+    fn fill( from:(u32, u32, u32), to:(u32, u32, u32), world_holder:&mut dyn WorldHolder ) -> TestDataset {
+        Self::fill_with( from, to, world_holder, (String::from("default"), Color { red:50, green:50, blue:50 }) )
     }
 
     fn print_num( num:u32, max:u32 ) {

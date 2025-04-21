@@ -5,7 +5,7 @@ use crate::{rendering::{
     model::Model,
     renderer::Renderer,
     vertex::{ Renderable, RendererModelDescriptions, Vec3 }
-}, structure_tests::tester::WORLD_Y};
+}, structure_tests::tester::{WORLD_X, WORLD_Y}};
 use super::{
     voxel_vertices::{ VoxelVertex, VOXEL_INDICES, VOXEL_VERTICES },
     world_holder::{ Color, Voxel, WorldHolder }
@@ -30,15 +30,16 @@ impl WorldRenderer {
             VoxelInstance {
                 translate: Vector3::new(
                     *x as f32,
-                    (WORLD_Y - *y) as f32,
-                    *z as f32
+                    -((WORLD_Y / 2) as f32) + *y as f32,
+                    // *y as f32,
+                    *z as f32,
                 ),
                 color: (*v._common_data._color).clone(),
             }
         } ).collect::<Vec<VoxelInstance>>();
 
         instances.push( VoxelInstance {
-            translate: Vector3::new( -1.0, -1.0, -1.0 ),
+            translate: Vector3::new( -1.0, 20.0, -1.0 ),
             color: Color { red:255, green:255, blue:50 },
         } );
 

@@ -1,6 +1,5 @@
 use std::rc::Rc;
-
-use crate::{rendering::vertex::Renderable, world::world_holder::{Voxel, WorldHolder}};
+use crate::world::world_holder::{Voxel, WorldHolder};
 
 #[derive(Debug)]
 pub enum OctreeNode<T> {
@@ -9,21 +8,21 @@ pub enum OctreeNode<T> {
 }
 
 impl<T> OctreeNode<T> {
-    fn insert(&mut self, depth:u8, x:u32, y:u32, z:u32, value:Rc<T> ) {
+    fn insert(&mut self, reversed_depth:u8, x:u32, y:u32, z:u32, value:Rc<T> ) {
         match self {
             OctreeNode::Leaf( leaf ) => {
-                if depth == 0 {
+                if reversed_depth == 0 {
                     *self = OctreeNode::Leaf( Some( value ) );
                     return;
                 }
 
                 let mut branch = OctreeBranch::new_filled_by( leaf.clone() );
-                branch.insert( depth, x, y, z, value );
+                branch.insert( reversed_depth, x, y, z, value );
                 *self = OctreeNode::Branch( Box::new( branch ) );
             }
 
             OctreeNode::Branch( branch ) => {
-                branch.insert( depth, x, y, z, value );
+                branch.insert( reversed_depth, x, y, z, value );
                 self.try_compress();
             }
         }
@@ -90,15 +89,79 @@ impl<T> OctreeNode<T> {
         }
     }
 
-    fn get( &self, depth:u8, x:u32, y:u32, z:u32 ) -> Option<Rc<T>> {
+    fn get( &self, reversed_depth:u8, x:u32, y:u32, z:u32 ) -> Option<Rc<T>> {
         match self {
             OctreeNode::Leaf( value ) => value.clone(),
             OctreeNode::Branch( branch ) => {
-                let child_index = OctreeBranch::<T>::get_child_index( depth, x, y, z );
-                branch.children[ child_index ].get( depth - 1, x, y, z )
+                let child_index = OctreeBranch::<T>::get_child_index( reversed_depth, x, y, z );
+                branch.children[ child_index ].get( reversed_depth - 1, x, y, z )
             }
         }
     }
+
+    // fn get_reachable( &self, offset:(u32, u32, u32), reversed_depth:u8, searchable_points:&mut VecDeque<(u32, u32, u32)> ) {
+    //     match self {
+    //         OctreeNode::Leaf( None ) => {
+    //             let cells_per_side = 1 << reversed_depth;
+
+    //             for x in 0..cells_per_side {
+    //                 for y in 0..cells_per_side {
+    //                     searchable_points.insert( (offset.0 + x, offset.1 + y, offset.2 - 1) );
+    //                 }
+    //             }
+
+    //             for x in 0..cells_per_side {
+    //                 for y in 0..cells_per_side {
+    //                     searchable_points.insert( (offset.0 + x, offset.1 + y, offset.2 + 1) );
+    //                 }
+    //             }
+
+    //             for y in 0..cells_per_side {
+    //                 for z in 0..cells_per_side {
+    //                     searchable_points.insert( (offset.0 - 1, offset.1 + y, offset.2 + z) );
+    //                 }
+    //             }
+
+    //             for y in 0..cells_per_side {
+    //                 for z in 0..cells_per_side {
+    //                     searchable_points.insert( (offset.0 + 1, offset.1 + y, offset.2 + z) );
+    //                 }
+    //             }
+
+    //             for x in 0..cells_per_side {
+    //                 for z in 0..cells_per_side {
+    //                     searchable_points.insert( (offset.0 + x, offset.1 - 1, offset.2 + z) );
+    //                 }
+    //             }
+
+    //             for x in 0..cells_per_side {
+    //                 for z in 0..cells_per_side {
+    //                     searchable_points.insert( (offset.0 + x, offset.1 + 1, offset.2 + z) );
+    //                 }
+    //             }
+    //         },
+    //         OctreeNode::Leaf( Some( _ ) ) => {},
+    //         OctreeNode::Branch( branch ) => {
+    //             let size = 1 << reversed_depth;
+
+    //             for point in searchable_points.clone() {
+    //                 if offset.0 > point.0 || point.0 > offset.0 + size { continue }
+    //                 if offset.1 > point.1 || point.1 > offset.1 + size { continue }
+    //                 if offset.2 > point.2 || point.2 > offset.2 + size { continue }
+
+    //                 let child_index = OctreeBranch::<T>::get_child_index( reversed_depth, point.0, point.1, point.2 );
+    //                 let child_offset = OctreeNode::<T>::get_child_offset( offset, child_index as u8, 1 << reversed_depth );
+
+    //                 branch.children[ child_index ].get_reachable( child_offset, reversed_depth - 1, searchable_points );
+
+    //                 if let OctreeNode::Leaf( _ ) = branch.children[ child_index ] {
+    //                     searchable_points.remove( &point );
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+
 
     fn collect_voxels( &self, offset:(u32, u32, u32), depth:u8, out:&mut Vec<(u32, u32, u32, Rc<T>)> ) {
         match self {
@@ -130,6 +193,14 @@ impl<T> OctreeNode<T> {
                 }
             }
         }
+    }
+
+    fn get_child_offset( parent_offset:(u32, u32, u32), child_index:u8, child_size:u32 ) -> (u32, u32, u32) {
+        let dx = ((child_index >> 2) & 1) as u32 * child_size;
+        let dy = ((child_index >> 1) & 1) as u32 * child_size;
+        let dz = (child_index & 1) as u32 * child_size;
+
+        (parent_offset.0 + dx, parent_offset.1 + dy, parent_offset.2 + dz)
     }
 
     fn remove( &mut self, depth:u8, x:u32, y:u32, z:u32 ) -> Option<Rc<T>> {
@@ -218,8 +289,8 @@ impl<T> OctreeBranch<T> {
         self.children[ child_index ].try_compress();
     }
 
-    fn get_child_index( depth:u8, x:u32, y:u32, z:u32 ) -> usize {
-        let shift = depth - 1;
+    fn get_child_index( reversed_depth:u8, x:u32, y:u32, z:u32 ) -> usize {
+        let shift = reversed_depth - 1;
         let xi = ((x >> shift) & 1) as usize;
         let yi = ((y >> shift) & 1) as usize;
         let zi = ((z >> shift) & 1) as usize;
@@ -272,6 +343,10 @@ impl WorldHolder for Octree<Voxel> {
 
     fn get_all_voxels( &self ) -> Vec<(u32, u32, u32, Rc<Voxel>)> {
         self.get_voxels()
+    }
+
+    fn get_all_visible_voxels( &self ) -> Vec<(u32, u32, u32, Rc<Voxel>)> {
+        todo!()
     }
 
     fn set_voxel( &mut self, x:u32, y:u32, z:u32, voxel:Option<Rc<Voxel>> ) {

@@ -8,11 +8,8 @@ mod window_manager;
 use image::{GrayImage, Luma};
 use simulation::Simulation;
 use std::path::Path;
-use noise::{generate_simplex_noise_image, generate_simplex_noise_image_with_octaves};
-use structure_tests::{octree::Octree, generate_world, tester::{self, Tester}};
-
-const WIDTH: u32 = 1024 * 4;
-const HEIGHT: u32 = 1024 * 4;
+use noise::generate_simplex_noise_image;
+use structure_tests::generate_world;
 
 fn main() {
     render_world();
@@ -23,6 +20,8 @@ fn main() {
 }
 
 fn generate_img() {
+    const WIDTH: u32 = 1024 * 4;
+    const HEIGHT: u32 = 1024 * 4;
     let mut img = GrayImage::new( WIDTH, HEIGHT );
 
     generate_simplex_noise_image( WIDTH, HEIGHT, |x, y, v| {
@@ -35,8 +34,9 @@ fn generate_img() {
 }
 
 fn render_world() {
+    let world = generate_world();
     let mut simulation = Simulation::new().unwrap();
     // simulation.update_instances_with_defaults();
-    simulation.update_instances_with_world_holder( generate_world() );
+    simulation.update_instances_with_world_holder( world );
     simulation.run_window_event_loop();
 }
