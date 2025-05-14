@@ -5,7 +5,7 @@ use crate::{rendering::{
     model::Model,
     renderer::Renderer,
     vertex::{ Renderable, RendererModelDescriptions, Vec3 }
-}, structure_tests::tester::{WORLD_X, WORLD_Y}};
+}, structure_tests::tester::{WORLD_X, WORLD_Y, WORLD_Z}};
 use super::{
     voxel_vertices::{ VoxelVertex, VOXEL_INDICES, VOXEL_VERTICES },
     world_holder::{ Color, Voxel, WorldHolder }
@@ -26,21 +26,29 @@ impl WorldRenderer {
     }
 
     pub fn update_instances_buffer( &mut self, renderer:&Renderer, world_holder:&impl WorldHolder ) {
-        let mut instances = world_holder.get_all_voxels().iter().map( |(x, y, z, v)| {
+        // let mut instances = world_holder.get_all_voxels().iter().map( |(x, y, z, v)| {
+        let mut instances = world_holder.get_all_visible_voxels_from( (0, WORLD_Y, 0) ).iter().map( |(x, y, z, v)| {
             VoxelInstance {
                 translate: Vector3::new(
                     *x as f32,
-                    -((WORLD_Y / 2) as f32) + *y as f32,
-                    // *y as f32,
+                    // -((WORLD_Y / 2) as f32) + *y as f32,
+                    *y as f32,
                     *z as f32,
                 ),
                 color: (*v._common_data._color).clone(),
             }
         } ).collect::<Vec<VoxelInstance>>();
 
+        println!( "instances_to_render={}", instances.len() );
+
         instances.push( VoxelInstance {
             translate: Vector3::new( -1.0, 20.0, -1.0 ),
             color: Color { red:255, green:255, blue:50 },
+        } );
+
+        instances.push( VoxelInstance {
+            translate: Vector3::new( 0.0, WORLD_Y as f32, 0.0 ),
+            color: Color { red:255, green:0, blue:255 },
         } );
 
         unsafe{ self.model.update_instances_buffer( renderer, instances ).unwrap() };

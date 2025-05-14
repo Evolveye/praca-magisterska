@@ -28,7 +28,7 @@ impl WorldHolder for VoxelMap {
         todo!()
     }
 
-    fn get_all_visible_voxels( &self ) -> Vec<(u32, u32, u32, Rc<Voxel>)> {
+    fn get_all_visible_voxels_from( &self, _from:(u32, u32, u32) ) -> Vec<(u32, u32, u32, Rc<Voxel>)> {
         todo!()
     }
 

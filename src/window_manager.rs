@@ -17,7 +17,7 @@ impl WindowManager {
     let event_loop = EventLoop::new()?;
     let window = WindowBuilder::new()
       .with_title( "Vulkan Tutorial (Rust)" )
-      .with_inner_size( LogicalSize::new( 1536, 1152 ) )
+      .with_inner_size( LogicalSize::new( 1024, 768 ) )
       .build( &event_loop )?;
 
     window.set_cursor_visible( false );

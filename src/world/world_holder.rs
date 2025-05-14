@@ -30,7 +30,7 @@ pub struct Voxel {
 pub trait WorldHolder {
     fn get_voxel( &self, x:Coordinate, y:Coordinate, z:Coordinate ) -> Option<Rc<Voxel>>;
     fn get_all_voxels( &self ) -> Vec<(u32, u32, u32, Rc<Voxel>)>;
-    fn get_all_visible_voxels( &self ) -> Vec<(u32, u32, u32, Rc<Voxel>)>;
+    fn get_all_visible_voxels_from( &self, from:(Coordinate, Coordinate, Coordinate) ) -> Vec<(u32, u32, u32, Rc<Voxel>)>;
 
     fn set_voxel( &mut self, x:Coordinate, y:Coordinate, z:Coordinate, voxel:Option<Rc<Voxel>> );
     fn fill_voxels( &mut self, from:(Coordinate, Coordinate, Coordinate), to:(Coordinate, Coordinate, Coordinate), voxel:Option<Rc<Voxel>> );

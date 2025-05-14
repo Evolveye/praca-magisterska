@@ -1,5 +1,30 @@
-use std::rc::Rc;
+use std::{collections::{HashMap, VecDeque}, ops::Deref, rc::Rc};
 use crate::world::world_holder::{Voxel, WorldHolder};
+
+struct Direction;
+
+impl Direction {
+    pub const UNSPECIFIED: u8 = 0;
+    pub const LEFT:        u8 = 1;
+    pub const RIGHT:       u8 = 2;
+    pub const TOP:         u8 = 3;
+    pub const BOTTOM:      u8 = 4;
+    pub const FRONT:       u8 = 5;
+    pub const BACK:        u8 = 6;
+
+    pub const OCTREE_NODE_INDICES: [[usize; 4]; 6] = [
+        /* opposite to LEFT   */  [1, 3, 5, 7],
+        /* opposite to RIGHT  */  [0, 2, 4, 6],
+        /* opposite to TOP    */  [0, 1, 4, 5],
+        /* opposite to BOTTOM */  [2, 3, 6, 7],
+        /* opposite to FRONT  */  [0, 1, 2, 3],
+        /* opposite to BACK   */  [4, 5, 6, 7],
+    ];
+
+    fn get_octree_node_indices_for_opposite_side( direction:u8 ) -> [usize; 4] {
+        Direction::OCTREE_NODE_INDICES[ direction as usize - 1 ]
+    }
+}
 
 #[derive(Debug)]
 pub enum OctreeNode<T> {
@@ -93,75 +118,11 @@ impl<T> OctreeNode<T> {
         match self {
             OctreeNode::Leaf( value ) => value.clone(),
             OctreeNode::Branch( branch ) => {
-                let child_index = OctreeBranch::<T>::get_child_index( reversed_depth, x, y, z );
+                let child_index = OctreeBranch::<T>::get_child_index( reversed_depth, &(x, y, z) );
                 branch.children[ child_index ].get( reversed_depth - 1, x, y, z )
             }
         }
     }
-
-    // fn get_reachable( &self, offset:(u32, u32, u32), reversed_depth:u8, searchable_points:&mut VecDeque<(u32, u32, u32)> ) {
-    //     match self {
-    //         OctreeNode::Leaf( None ) => {
-    //             let cells_per_side = 1 << reversed_depth;
-
-    //             for x in 0..cells_per_side {
-    //                 for y in 0..cells_per_side {
-    //                     searchable_points.insert( (offset.0 + x, offset.1 + y, offset.2 - 1) );
-    //                 }
-    //             }
-
-    //             for x in 0..cells_per_side {
-    //                 for y in 0..cells_per_side {
-    //                     searchable_points.insert( (offset.0 + x, offset.1 + y, offset.2 + 1) );
-    //                 }
-    //             }
-
-    //             for y in 0..cells_per_side {
-    //                 for z in 0..cells_per_side {
-    //                     searchable_points.insert( (offset.0 - 1, offset.1 + y, offset.2 + z) );
-    //                 }
-    //             }
-
-    //             for y in 0..cells_per_side {
-    //                 for z in 0..cells_per_side {
-    //                     searchable_points.insert( (offset.0 + 1, offset.1 + y, offset.2 + z) );
-    //                 }
-    //             }
-
-    //             for x in 0..cells_per_side {
-    //                 for z in 0..cells_per_side {
-    //                     searchable_points.insert( (offset.0 + x, offset.1 - 1, offset.2 + z) );
-    //                 }
-    //             }
-
-    //             for x in 0..cells_per_side {
-    //                 for z in 0..cells_per_side {
-    //                     searchable_points.insert( (offset.0 + x, offset.1 + 1, offset.2 + z) );
-    //                 }
-    //             }
-    //         },
-    //         OctreeNode::Leaf( Some( _ ) ) => {},
-    //         OctreeNode::Branch( branch ) => {
-    //             let size = 1 << reversed_depth;
-
-    //             for point in searchable_points.clone() {
-    //                 if offset.0 > point.0 || point.0 > offset.0 + size { continue }
-    //                 if offset.1 > point.1 || point.1 > offset.1 + size { continue }
-    //                 if offset.2 > point.2 || point.2 > offset.2 + size { continue }
-
-    //                 let child_index = OctreeBranch::<T>::get_child_index( reversed_depth, point.0, point.1, point.2 );
-    //                 let child_offset = OctreeNode::<T>::get_child_offset( offset, child_index as u8, 1 << reversed_depth );
-
-    //                 branch.children[ child_index ].get_reachable( child_offset, reversed_depth - 1, searchable_points );
-
-    //                 if let OctreeNode::Leaf( _ ) = branch.children[ child_index ] {
-    //                     searchable_points.remove( &point );
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
-
 
     fn collect_voxels( &self, offset:(u32, u32, u32), depth:u8, out:&mut Vec<(u32, u32, u32, Rc<T>)> ) {
         match self {
@@ -195,14 +156,6 @@ impl<T> OctreeNode<T> {
         }
     }
 
-    fn get_child_offset( parent_offset:(u32, u32, u32), child_index:u8, child_size:u32 ) -> (u32, u32, u32) {
-        let dx = ((child_index >> 2) & 1) as u32 * child_size;
-        let dy = ((child_index >> 1) & 1) as u32 * child_size;
-        let dz = (child_index & 1) as u32 * child_size;
-
-        (parent_offset.0 + dx, parent_offset.1 + dy, parent_offset.2 + dz)
-    }
-
     fn remove( &mut self, depth:u8, x:u32, y:u32, z:u32 ) -> Option<Rc<T>> {
         match self {
             OctreeNode::Leaf( value ) => {
@@ -210,7 +163,7 @@ impl<T> OctreeNode<T> {
             }
 
             OctreeNode::Branch(branch) => {
-                let child_index = OctreeBranch::<T>::get_child_index( depth, x, y, z );
+                let child_index = OctreeBranch::<T>::get_child_index( depth, &(x, y, z) );
                 let result = branch.children[child_index].remove( depth - 1, x, y, z );
 
                 branch.children[child_index].try_compress();
@@ -221,14 +174,14 @@ impl<T> OctreeNode<T> {
         }
     }
 
-    fn count_leaves(&self) -> usize {
+    fn count_leaves( &self ) -> usize {
         match self {
             OctreeNode::Leaf(_) => 1,
             OctreeNode::Branch( branch ) => branch.children.iter().map( |c| c.count_leaves() ).sum(),
         }
     }
 
-    fn try_compress(&mut self) {
+    fn try_compress( &mut self ) {
         let branch = match self {
             OctreeNode::Branch( branch ) => branch,
             _ => return
@@ -263,6 +216,22 @@ impl<T> OctreeNode<T> {
 
         *self = OctreeNode::Leaf( first_value );
     }
+
+    fn get_child_offset( parent_offset:(u32, u32, u32), parent_size:u32, child_index:usize ) -> (u32, u32, u32) {
+        let child_size = parent_size >> 1;
+        let child_index = child_index as u8;
+        let dx = ( child_index       & 1) as u32 * child_size;
+        let dy = ((child_index >> 1) & 1) as u32 * child_size;
+        let dz = ((child_index >> 2) & 1) as u32 * child_size;
+
+        (parent_offset.0 + dx, parent_offset.1 + dy, parent_offset.2 + dz)
+    }
+
+    fn contains_point( offset:&(u32, u32, u32), size:u32, point:&(u32, u32, u32) ) -> bool {
+        point.0 >= offset.0 && point.0 < offset.0 + size &&
+        point.1 >= offset.1 && point.1 < offset.1 + size &&
+        point.2 >= offset.2 && point.2 < offset.2 + size
+    }
 }
 
 #[derive(Debug)]
@@ -278,7 +247,7 @@ impl<T> OctreeBranch<T> {
     }
 
     fn insert( &mut self, depth:u8, x:u32, y:u32, z:u32, value:Rc<T> ) {
-        let child_index = Self::get_child_index( depth, x, y, z );
+        let child_index = Self::get_child_index( depth, &(x, y, z) );
 
         if depth == 1 {
             self.children[ child_index ] = OctreeNode::Leaf( Some( value ) );
@@ -289,13 +258,13 @@ impl<T> OctreeBranch<T> {
         self.children[ child_index ].try_compress();
     }
 
-    fn get_child_index( reversed_depth:u8, x:u32, y:u32, z:u32 ) -> usize {
+    fn get_child_index( reversed_depth:u8, point:&(u32, u32, u32) ) -> usize {
         let shift = reversed_depth - 1;
-        let xi = ((x >> shift) & 1) as usize;
-        let yi = ((y >> shift) & 1) as usize;
-        let zi = ((z >> shift) & 1) as usize;
+        let xi = ((point.0 >> shift) & 1) as usize;
+        let yi = ((point.1 >> shift) & 1) as usize;
+        let zi = ((point.2 >> shift) & 1) as usize;
 
-        (xi << 2) | (yi << 1) | zi
+        xi | (yi << 1) | (zi << 2)
     }
 }
 
@@ -336,6 +305,278 @@ impl<T> Octree<T> {
     }
 }
 
+impl Octree<Voxel> {
+    pub fn get_visible_with_flood( &self, initial_point:(u32,u32,u32) ) -> Vec<(u32, u32, u32, Rc<Voxel>)> {
+        struct Point {
+            coords: (u32,u32,u32),
+            depth: u8,
+            check_dir: u8
+        }
+
+        let mut result = HashMap::new();
+        let mut points_memory = HashMap::<(u32, u32, u32), u8>::new();
+        let mut points = VecDeque::from([ Point { coords:initial_point, depth:self.max_depth, check_dir:Direction::UNSPECIFIED } ]);
+        let mut path = vec![(&self.root, (0, 0, 0))];
+
+        // let (mut node_ptr, mut node_offset) = path.last().unwrap();
+
+        // while let OctreeNode::Branch( branch ) = node_ptr {
+        //     let depth = path.len() as u8 - 1;
+        //     let reversed_depth = self.max_depth - depth;
+        //     let child_index = OctreeBranch::<T>::get_child_index( reversed_depth, &initial_point );
+        //     let child_offset = OctreeNode::<T>::get_child_offset( node_offset, 1 << reversed_depth, child_index );
+
+        //     node_ptr = &branch.children[ child_index as usize ];
+        //     node_offset = child_offset;
+        //     path.push( (node_ptr, child_offset) );
+        // }
+
+        'points: while let Some( point ) = points.pop_front() {
+            // Continue if node offset is in memory
+            if let Some( count ) = points_memory.get_mut( &point.coords ) {
+                *count -= 1;
+                continue;
+            }
+
+            // Going up in path vector
+            while {
+                let (_, offset) = path.last().unwrap();
+                let depth = path.len() as u8 - 1;
+                let size = 1 << (self.max_depth - depth);
+                // println!(
+                //     "max_depth={}, path.len={}, shift={}, size={}, offset={:?}, coords={:?}",
+                //     self.max_depth, path.len(), self.max_depth - depth, size, offset, point.coords
+                // );
+                !OctreeNode::<Voxel>::contains_point( &offset, size, &point.coords )
+            } {
+                if path.len() == 1 {
+                    unreachable!( "Cannot pop last path element! path.len == {}", path.len() )
+                }
+
+                path.pop().unwrap();
+            }
+
+
+            // Going down in path vector
+            println!( " - - - " );
+            println!( "1. Outer: p.coords={:?} p.depth={:?} p.dir={:?}", point.coords, point.depth, point.check_dir as u8 );
+            let (mut node_ptr, mut node_offset) = path.last().unwrap();
+
+            while let OctreeNode::Branch( branch ) = node_ptr {
+                let depth = path.len() as u8 - 1;
+                let reversed_depth = self.max_depth - depth;
+
+                if depth == point.depth {
+                    for i in Direction::get_octree_node_indices_for_opposite_side( point.check_dir ) { // Every node on the side
+                        let coords = OctreeNode::<Voxel>::get_child_offset( node_offset, 1 << reversed_depth, i );
+
+                        points.push_front( Point {
+                            coords,
+                            check_dir: point.check_dir,
+                            depth: point.depth + 1,
+                        } );
+                    }
+
+                    println!( "Division" );
+
+                    continue 'points;
+                }
+
+                let child_index = OctreeBranch::<Voxel>::get_child_index( reversed_depth, &point.coords );
+                let child_offset = OctreeNode::<Voxel>::get_child_offset( node_offset, 1 << reversed_depth, child_index );
+
+                node_ptr = &branch.children[ child_index as usize ];
+                node_offset = child_offset;
+                path.push( (node_ptr, child_offset) );
+                // println!( "  - node_offset={:?} node_r_depth={:?}, size={:?}", offset, reversed_depth, 1 << reversed_depth );
+            }
+
+            // Handling the leaf
+            let depth = path.len() as u8 - 1;
+            let reversed_depth = self.max_depth - depth;
+            let leaf_size = 1 << reversed_depth;
+            println!( "2. Found: leaf_offset={:?} leaf_r_depth={:?}, leaf_size={:?}", node_offset, reversed_depth, leaf_size );
+
+            let leaf_value = match node_ptr {
+                OctreeNode::Leaf( opt ) => opt,
+                _ => unreachable!()
+            };
+
+            // Fill results if have value
+            if let Some( data ) = leaf_value {
+                let size = 1 << reversed_depth;
+                let decremented_size = size - 1;
+
+                for x in 0..size {
+                    for y in 0..size {
+                        for z in 0..size {
+                            if x == 0 || y == 0 || z == 0 || x == decremented_size || y == decremented_size || z == decremented_size {
+                                let coord = (node_offset.0 + x, node_offset.1 + y, node_offset.2 + z);
+                                result.entry( coord ).or_insert_with( || data.clone() );
+                            }
+                        }
+                    }
+                }
+
+                continue
+            }
+
+            // Generate siblings for empty cell
+            let debug_coord = (0, 15, 0);
+            let root_size = 1 << self.max_depth;
+            let mut next_points = Vec::with_capacity( 6 );
+
+            if point.coords.0 == debug_coord.0 && point.coords.1 == debug_coord.1 && point.coords.2 == debug_coord.2 {
+                println!( "debug point" )
+            }
+
+            if point.check_dir != Direction::RIGHT && node_offset.0 > 0 {
+                next_points.push( Point { depth, coords:(node_offset.0 - 1,         node_offset.1, node_offset.2), check_dir:Direction::LEFT } )
+            }
+            if point.check_dir != Direction::LEFT && node_offset.0 < root_size - leaf_size {
+                next_points.push( Point { depth, coords:(node_offset.0 + leaf_size, node_offset.1, node_offset.2), check_dir:Direction::RIGHT } )
+            }
+
+            if point.check_dir != Direction::TOP && node_offset.1 > 0 {
+                next_points.push( Point { depth, coords:(node_offset.0, node_offset.1 - 1,         node_offset.2), check_dir:Direction::BOTTOM } )
+            }
+            if point.check_dir != Direction::BOTTOM && node_offset.1 < root_size - leaf_size {
+                next_points.push( Point { depth, coords:(node_offset.0, node_offset.1 + leaf_size,  node_offset.2), check_dir:Direction::TOP } )
+            }
+
+            if point.check_dir != Direction::FRONT && node_offset.2 > 0 {
+                next_points.push( Point { depth, coords:(node_offset.0, node_offset.1, node_offset.2 - 1        ), check_dir:Direction::BACK } )
+            }
+            if point.check_dir != Direction::BACK && node_offset.2 < root_size - leaf_size {
+                next_points.push( Point { depth, coords:(node_offset.0, node_offset.1, node_offset.2 + leaf_size), check_dir:Direction::FRONT } )
+            }
+
+            // Memoize outer children
+            if leaf_size == 1 {
+                points_memory.insert( node_offset, if point.check_dir == Direction::UNSPECIFIED { 6 } else { 5 } );
+
+                if points_memory.get( &debug_coord ).is_some() {
+                    println!(
+                        "insertion into memory {:?} = {:?}; node.offset = {:?}; point.coord = {:?}, point.dir = {}",
+                        debug_coord, points_memory.get( &debug_coord ), node_offset, point.coords, point.check_dir
+                    );
+                }
+            } else if leaf_size == 2 {
+                points_memory.reserve( 8 );
+                points_memory.insert( node_offset, 3 );
+                points_memory.insert( (node_offset.0 + 1,   node_offset.1,      node_offset.2),     3 );
+                points_memory.insert( (node_offset.0,       node_offset.1 + 1,  node_offset.2),     3 );
+                points_memory.insert( (node_offset.0 + 1,   node_offset.1 + 1,  node_offset.2),     3 );
+                points_memory.insert( (node_offset.0,       node_offset.1,      node_offset.2 + 1), 3 );
+                points_memory.insert( (node_offset.0 + 1,   node_offset.1,      node_offset.2 + 1), 3 );
+                points_memory.insert( (node_offset.0,       node_offset.1 + 1,  node_offset.2 + 1), 3 );
+                points_memory.insert( (node_offset.0 + 1,   node_offset.1 + 1,  node_offset.2 + 1), 3 );
+
+                if points_memory.get( &debug_coord ).is_some() {
+                    println!(
+                        "insertion into memory {:?} = {:?}; node.offset = {:?}; point.coord = {:?}, point.dir = {}",
+                        debug_coord, points_memory.get( &debug_coord ), node_offset, point.coords, point.check_dir
+                    );
+                }
+            } else {
+                let boundary_range = [0, leaf_size - 1];
+                let internal_size = leaf_size - 2;
+
+                points_memory.reserve( (leaf_size * leaf_size * leaf_size) as usize - (internal_size * internal_size * internal_size) as usize );
+
+                for x in boundary_range {
+                    for y in 1..leaf_size-1 {
+                        for z in 1..leaf_size-1 {
+                            points_memory.insert( (node_offset.0 + x, node_offset.1 + y, node_offset.2 + z ), 1 );
+                        }
+                    }
+                }
+
+                for x in 1..leaf_size-1 {
+                    for y in boundary_range {
+                        for z in 1..leaf_size-1 {
+                            points_memory.insert( (node_offset.0 + x, node_offset.1 + y, node_offset.2 + z ), 1 );
+                        }
+                    }
+                }
+
+                for x in 1..leaf_size-1 {
+                    for y in 1..leaf_size-1 {
+                        for z in boundary_range {
+                            points_memory.insert( (node_offset.0 + x, node_offset.1 + y, node_offset.2 + z ), 1 );
+                        }
+                    }
+                }
+
+                for x in boundary_range {
+                    for y in boundary_range {
+                        for z in 1..leaf_size-1 {
+                            points_memory.insert( (node_offset.0 + x, node_offset.1 + y, node_offset.2 + z ), 2 );
+                        }
+                    }
+                }
+
+                for x in boundary_range {
+                    for y in 1..leaf_size-1 {
+                        for z in boundary_range {
+                            points_memory.insert( (node_offset.0 + x, node_offset.1 + y, node_offset.2 + z ), 2 );
+                        }
+                    }
+                }
+
+                for x in 1..leaf_size-1 {
+                    for y in boundary_range {
+                        for z in boundary_range {
+                            points_memory.insert( (node_offset.0 + x, node_offset.1 + y, node_offset.2 + z ), 2 );
+                        }
+                    }
+                }
+
+                for x in boundary_range {
+                    for y in boundary_range {
+                        for z in boundary_range {
+                            points_memory.insert( (node_offset.0 + x, node_offset.1 + y, node_offset.2 + z ), 3 );
+                        }
+                    }
+                }
+
+                if points_memory.get( &debug_coord ).is_some() {
+                    println!(
+                        "insertion into memory {:?} = {:?}; node.offset = {:?}; point.coord = {:?}, point.dir = {}",
+                        debug_coord, points_memory.get( &debug_coord ), node_offset, point.coords, point.check_dir
+                    );
+                }
+            }
+
+            // Process siblings
+            points.reserve( next_points.len() );
+
+            for next_point in next_points {
+                if result.contains_key( &next_point.coords ) {
+                    continue;
+                }
+
+                if let Some( count ) = points_memory.get_mut( &next_point.coords ) {
+                    if next_point.coords.0 == debug_coord.0 && next_point.coords.1 == debug_coord.1 && next_point.coords.2 == debug_coord.2 {
+                        println!( "count for {:?} = {:?}, np.coords={:?}, np.dir={:?}, leaf.offset={:?}", debug_coord, *count, next_point.coords, next_point.check_dir, node_offset )
+                    }
+                    if *count == 0 {
+                        println!( "count==0, p={:?}", next_point.coords )
+                    }
+                    *count -= 1;
+                } else {
+                    if next_point.coords.0 == debug_coord.0 && next_point.coords.1 == debug_coord.1 && next_point.coords.2 == debug_coord.2 {
+                        println!( "insertion of {:?}", debug_coord )
+                    }
+                    points.push_front( next_point );
+                }
+            }
+        }
+
+        result.drain().map( |pair| (pair.0.0, pair.0.1, pair.0.2, pair.1) ).collect()
+    }
+}
+
 impl WorldHolder for Octree<Voxel> {
     fn get_voxel( &self, x:u32, y:u32, z:u32 ) -> Option<Rc<Voxel>> {
         self.get( x, y, z )
@@ -345,8 +586,8 @@ impl WorldHolder for Octree<Voxel> {
         self.get_voxels()
     }
 
-    fn get_all_visible_voxels( &self ) -> Vec<(u32, u32, u32, Rc<Voxel>)> {
-        todo!()
+    fn get_all_visible_voxels_from( &self, from:(u32, u32, u32) ) -> Vec<(u32, u32, u32, Rc<Voxel>)> {
+        self.get_visible_with_flood( from )
     }
 
     fn set_voxel( &mut self, x:u32, y:u32, z:u32, voxel:Option<Rc<Voxel>> ) {

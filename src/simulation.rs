@@ -36,24 +36,33 @@ pub struct ControlManager {
 }
 
 impl ControlManager {
-  fn new( position:Point3<f32>, target:Point3<f32>) -> Self {
-    let direction = (target - position).normalize();
-    let pitch = direction.y.asin();
-    let yaw = direction.z.atan2( direction.x );
-
-    Self {
+  fn new( position:Point3<f32>, target:Point3<f32> ) -> Self {
+    let mut instance = Self {
       position,
+      rotation: vec2( 0.0, 0.0 ),
       velocity_right: 0.0,
       velocity_left: 0.0,
       velocity_up: 0.0,
       velocity_down: 0.0,
       velocity_forward: 0.0,
       velocity_backward: 0.0,
-      rotation: vec2( pitch, yaw ),
       mouse_position: point2( 0.0, 0.0 ),
       mouse_last_used_position: point2( 0.0, 0.0 ),
       lmb_pressed: false
-    }
+    };
+
+    instance.update_position( position, target );
+
+    instance
+  }
+
+  fn update_position( &mut self, position:Point3<f32>, target:Point3<f32> ) {
+    let direction = (target - position).normalize();
+    let pitch = direction.y.asin();
+    let yaw = direction.z.atan2( direction.x );
+
+    self.position = position;
+    self.rotation = vec2( pitch, yaw );
   }
 
   fn update_rotation( &mut self, settings:&AppSettings, delta_time:f32 ) {
@@ -134,7 +143,7 @@ impl Simulation {
       world_renderer,
       // model,
       // world: world::World::new(),
-      control_manager: ControlManager::new( point3( 0.0, 20.0, -35.0 ), point3( 0.0, 0.0, -8.0 ) ),
+      control_manager: ControlManager::new( point3( 0.0, 20.0, 35.0 ), point3( 0.0, 0.0, -8.0 ) ),
       settings: AppSettings::new(),
 
       start_time: Instant::now(),
@@ -152,8 +161,8 @@ impl Simulation {
     self.world_renderer.update_instances_buffer( &self.renderer, &world_holder );
   }
 
-  pub fn move_camera_to( &mut self, vec:Point3<f32> ) {
-    self.control_manager.position = vec;
+  pub fn move_camera_to( &mut self, position:(f32, f32, f32), target:(f32, f32, f32) ) {
+    self.control_manager.update_position( Point3::from( position ), Point3::from( target ) );
   }
 
   pub fn run_window_event_loop( &mut self ) {
