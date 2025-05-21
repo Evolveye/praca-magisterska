@@ -1,14 +1,17 @@
 use cgmath::Vector3;
 use vulkanalia::prelude::v1_0::*;
 use vulkanalia::vk;
-use crate::{rendering::{
-    model::Model,
-    renderer::Renderer,
-    vertex::{ Renderable, RendererModelDescriptions, Vec3 }
-}, structure_tests::tester::{WORLD_X, WORLD_Y, WORLD_Z}};
+use crate::{
+    structure_tests::tester::{ WORLD_X, WORLD_Y, WORLD_Z },
+    rendering::{
+        model::Model,
+        renderer::Renderer,
+        vertex::{ Renderable, RendererModelDescriptions, Vec3 }
+    },
+};
 use super::{
     voxel_vertices::{ VoxelVertex, VOXEL_INDICES, VOXEL_VERTICES },
-    world_holder::{ Color, Voxel, WorldHolder }
+    world_holder::{ Color, Voxel, WorldHolder },
 };
 
 
@@ -26,6 +29,8 @@ impl WorldRenderer {
     }
 
     pub fn update_instances_buffer( &mut self, renderer:&Renderer, world_holder:&impl WorldHolder ) {
+        println!( "Getting voxels..." );
+
         // let mut instances = world_holder.get_all_voxels().iter().map( |(x, y, z, v)| {
         let mut instances = world_holder.get_all_visible_voxels_from( (0, WORLD_Y, 0) ).iter().map( |(x, y, z, v)| {
             VoxelInstance {
@@ -46,10 +51,12 @@ impl WorldRenderer {
             color: Color { red:255, green:255, blue:50 },
         } );
 
-        instances.push( VoxelInstance {
-            translate: Vector3::new( 0.0, WORLD_Y as f32, 0.0 ),
-            color: Color { red:255, green:0, blue:255 },
-        } );
+        // instances.push( VoxelInstance {
+        //     translate: Vector3::new( 0.0, 4.0, 5.0 ),
+        //     color: Color { red:255, green:0, blue:50 },
+        // } );
+
+        println!( "{:?}", world_holder.get_voxel( 1, 3, 2 ) );
 
         unsafe{ self.model.update_instances_buffer( renderer, instances ).unwrap() };
     }

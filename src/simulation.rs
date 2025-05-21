@@ -23,6 +23,7 @@ type Mat4 = cgmath::Matrix4<f32>;
 #[derive(Clone, Debug)]
 pub struct ControlManager {
   pub position: Point3<f32>,
+  pub speed: f32,
   pub velocity_left: f32,
   pub velocity_right: f32,
   pub velocity_up: f32,
@@ -41,6 +42,7 @@ impl ControlManager {
       position,
       rotation: vec2( 0.0, 0.0 ),
       velocity_right: 0.0,
+      speed: 2.0,
       velocity_left: 0.0,
       velocity_up: 0.0,
       velocity_down: 0.0,
@@ -223,7 +225,7 @@ impl Simulation {
 
           WindowEvent::KeyboardInput { event, .. } => {
             let pressed = event.state == ElementState::Pressed;
-            let speed = 2.0;
+            let speed = self.control_manager.speed;
 
             match event.physical_key {
               PhysicalKey::Code( KeyCode::ArrowLeft  ) | PhysicalKey::Code( KeyCode::KeyA ) => self.control_manager.velocity_left  = if pressed { speed } else { 0.0 },
@@ -232,6 +234,7 @@ impl Simulation {
               PhysicalKey::Code( KeyCode::Space      ) => self.control_manager.velocity_up   = if pressed { speed } else { 0.0 },
               PhysicalKey::Code( KeyCode::ArrowUp    ) | PhysicalKey::Code( KeyCode::KeyW ) => self.control_manager.velocity_forward  = if pressed { speed } else { 0.0 },
               PhysicalKey::Code( KeyCode::ArrowDown  ) | PhysicalKey::Code( KeyCode::KeyS ) => self.control_manager.velocity_backward = if pressed { speed } else { 0.0 },
+              PhysicalKey::Code( KeyCode::ControlLeft ) => self.control_manager.speed = if pressed { 5.0 } else { 2.0 },
               PhysicalKey::Code( KeyCode::Escape ) => {
                 elwt.exit();
                 Simulation::destroy( &mut self.renderer, &mut self.world_renderer );

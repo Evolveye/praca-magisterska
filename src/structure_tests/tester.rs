@@ -1,4 +1,4 @@
-use std::{cmp, collections::HashMap, rc::Rc};
+use std::{cmp, collections::{HashMap, VecDeque}, rc::Rc};
 
 use rand::seq::IteratorRandom;
 
@@ -8,10 +8,14 @@ use crate::{
     }
 };
 
+use super::quadtree::{Quadtree, QuadtreeBranch, QuadtreeNode};
+
 // pub const RENDER_DISTANCE:u32 = 32 * 16;
-pub const RENDER_DISTANCE:u32 = 15;
+pub const RENDER_DISTANCE:u32 = 32 * 8;
 pub const WORLD_Z:u32 = RENDER_DISTANCE * 2 + 1;
-pub const WORLD_Y:u32 = 31;
+// pub const WORLD_Y:u32 = 10;
+// pub const WORLD_Y:u32 = 7;
+pub const WORLD_Y:u32 = 250;
 // pub const WORLD_Y:u32 = 384;
 const WORLD_HALF_Y:u32 = WORLD_Y / 2;
 pub const WORLD_X:u32 = RENDER_DISTANCE * 2 + 1;
@@ -168,107 +172,33 @@ impl Tester {
 
     #[allow(dead_code)]
     pub fn fill_50pc_realistically( world_holder:&mut dyn WorldHolder ) -> TestDataset {
-        let mut dataset = TestDataset::new();
-
-        Tester::fill_50pc_realistically_ending( world_holder, dataset )
-    }
-
-    fn fill_50pc_realistically_ending( world_holder:&mut dyn WorldHolder, mut dataset:TestDataset ) -> TestDataset {
         let noise = SimplexNoise::new( 50 );
+        let max_depth = Quadtree::get_max_depth_for( WORLD_X );
+        let noise_frequency = 0.007;
+        let generate_value = |x, z| noise.noise3d( (x as f64 + 206.0) * noise_frequency, 1.0, (z as f64 + 140.0)  * noise_frequency );
 
-        let coal_key = String::from( "coal" );
-        let bedrock_key = String::from( "bedrock" );
-        let bedrock_color = Color { red:15, green:15, blue:15 };
-        let coal_color = Color { red:5, green:5, blue:5 };
+        println!( "Filling quadtree with max depth = {}...", max_depth );
+        let quadtree = Quadtree::from_terrain_generation( max_depth, &generate_value );
 
+        println!( "Filling world holder with height map..." );
+        quadtree.proces_entire_tree( &mut |offset, size, noise_value| {
+            let multiplied_noise = noise_value * 10.0;
+            let current_min = (WORLD_HALF_Y as i32 + multiplied_noise as i32) as u32;
+            if current_min < offset.1 { return offset.1 }
 
-        println!( "Filling bedrock | {:?} to {:?}", (0, 0, 0), (WORLD_Z, 0, WORLD_X) );
-        let dataset_bedrock = Self::fill_with( (0, 0, 0), (WORLD_Z, 0, WORLD_X), world_holder, (bedrock_key.clone(), bedrock_color) );
-        dataset.expand( dataset_bedrock );
+            // println!( "current_min={}, noise_value={}", current_min, noise_value );
+            let size = size - 1;
+            let grass_color = Color { red:10, green:128 + (multiplied_noise * 5.0) as u8, blue:10 };
+            let to = (offset.0 + size, current_min, offset.2 + size);
 
-        println!( "Filling deposits" );
-        dataset.colors.insert( coal_key.clone(), Rc::new( coal_color ) );
-        dataset.materials.insert( coal_key.clone(), Rc::new( Material { _density:125 } ) );
+            Self::fill_with( offset, to, world_holder, (format!( "grass_{}", current_min ), grass_color) );
 
-        dataset.common_voxel_dataset.insert( coal_key.clone(), Rc::new( CommonVoxelData {
-            _color: dataset.colors.get( &coal_key ).unwrap().clone(),
-            _material: dataset.materials.get( &coal_key ).unwrap().clone()
-        } ) );
+            current_min + 1
+        } );
 
-        dataset.voxels.insert( coal_key.clone(), Rc::new( Voxel {
-            _common_data: dataset.common_voxel_dataset.get( &coal_key ).unwrap().clone(),
-            _individual_data:vec![]
-        } ) );
-
-        let coal = dataset.voxels.get( &coal_key ).unwrap().clone();
-
-        for z in 0..=WORLD_Z {
-            for y in 1..(WORLD_HALF_Y - 5) {
-                for x in 0..=WORLD_X {
-                    let noise_value = noise.noise3d( x as f64, y as f64, z as f64 );
-
-                    if noise_value > 0.85 {
-                        world_holder.set_voxel( x, y, z, Some( coal.clone() ) );
-                    }
-                }
-            }
-        }
-
-        let bedrock = dataset.voxels.get( &bedrock_key ).unwrap().clone();
-
-        for z in 0..=WORLD_Z {
-            for y in 1..3 {
-                for x in 0..=WORLD_X {
-                    let noise_value = noise.noise3d( x as f64, y as f64, z as f64 );
-
-                    if noise_value > 0.8 / y as f64 {
-                        world_holder.set_voxel( x, 3 - y, z, Some( bedrock.clone() ) );
-                    }
-                }
-            }
-        }
-
-        println!( "Drawing axies" );
-        let axies_origin = ((WORLD_X / 2) as i32, (WORLD_HALF_Y + 5) as i32, (WORLD_Z / 2) as i32);
-        let axies_length = 5;
-        let axies_key = String::from( "axis" );
-        let axies_makers:Vec<(&str, Box<dyn Fn(u8) -> Color>, Box<dyn Fn(i32) -> (i32, i32, i32)>)> = vec![
-            ("x", Box::new( |n| Color { red:(255 / (axies_length + 1)) * (n + 2), green:0, blue:0 } ), Box::new( |n| (n - axies_length as i32 / 2, 0, 0) )),
-            ("y", Box::new( |n| Color { red:0, green:(255 / (axies_length + 1)) * (n + 2), blue:0 } ), Box::new( |n| (0, n - axies_length as i32 / 2, 0) )),
-            ("z", Box::new( |n| Color { red:0, green:0, blue:(255 / (axies_length + 1)) * (n + 2) } ), Box::new( |n| (0, 0, n - axies_length as i32 / 2) )),
-        ];
-
-        dataset.materials.insert( axies_key.clone(), Rc::new( Material { _density:1000 } ) );
-
-        for axis in axies_makers {
-            let key = format!( "{}_{}", &axies_key, axis.0 );
-
-            for n in 0..axies_length {
-                let coords = axis.2( n as i32 );
-
-                dataset.colors.insert( key.clone(), Rc::new( axis.1( n ) ) );
-
-                dataset.common_voxel_dataset.insert( key.clone(), Rc::new( CommonVoxelData {
-                    _color: dataset.colors.get( &key ).unwrap().clone(),
-                    _material: dataset.materials.get( &axies_key ).unwrap().clone()
-                } ) );
-
-                dataset.voxels.insert( key.clone(), Rc::new( Voxel {
-                    _common_data: dataset.common_voxel_dataset.get( &key ).unwrap().clone(),
-                    _individual_data:vec![]
-                } ) );
-
-                world_holder.set_voxel(
-                    (axies_origin.0 + coords.0) as u32, (axies_origin.1 + coords.1) as u32, (axies_origin.2 + coords.2) as u32,
-                    Some( dataset.voxels.get( &key ).unwrap().clone() )
-                );
-            }
-        }
-
-        world_holder.set_voxel( 0, 0, 0, Some( dataset.voxels.get( &format!( "{}_{}", &axies_key, "x" ) ).unwrap().clone() ) );
-        world_holder.set_voxel( WORLD_X, WORLD_Y, WORLD_Z, Some( dataset.voxels.get( &format!( "{}_{}", &axies_key, "y" ) ).unwrap().clone() ) );
-
+        let dataset = TestDataset::new();
         dataset
+        // Tester::fill_50pc_realistically_ending( world_holder, dataset )
     }
 
     #[allow(dead_code)]
@@ -411,6 +341,107 @@ impl Tester {
 
     fn fill( from:(u32, u32, u32), to:(u32, u32, u32), world_holder:&mut dyn WorldHolder ) -> TestDataset {
         Self::fill_with( from, to, world_holder, (String::from("default"), Color { red:50, green:50, blue:50 }) )
+    }
+
+    fn fill_50pc_realistically_ending( world_holder:&mut dyn WorldHolder, mut dataset:TestDataset ) -> TestDataset {
+        let noise = SimplexNoise::new( 50 );
+
+        let coal_key = String::from( "coal" );
+        let bedrock_key = String::from( "bedrock" );
+        let bedrock_color = Color { red:15, green:15, blue:15 };
+        let coal_color = Color { red:5, green:5, blue:5 };
+
+
+        println!( "Filling bedrock..." );
+        let dataset_bedrock = Self::fill_with( (0, 0, 0), (WORLD_Z, 0, WORLD_X), world_holder, (bedrock_key.clone(), bedrock_color) );
+        dataset.expand( dataset_bedrock );
+
+        println!( "Filling deposits..." );
+        dataset.colors.insert( coal_key.clone(), Rc::new( coal_color ) );
+        dataset.materials.insert( coal_key.clone(), Rc::new( Material { _density:125 } ) );
+
+        dataset.common_voxel_dataset.insert( coal_key.clone(), Rc::new( CommonVoxelData {
+            _color: dataset.colors.get( &coal_key ).unwrap().clone(),
+            _material: dataset.materials.get( &coal_key ).unwrap().clone()
+        } ) );
+
+        dataset.voxels.insert( coal_key.clone(), Rc::new( Voxel {
+            _common_data: dataset.common_voxel_dataset.get( &coal_key ).unwrap().clone(),
+            _individual_data:vec![]
+        } ) );
+
+        let coal = dataset.voxels.get( &coal_key ).unwrap().clone();
+
+        for z in 0..=WORLD_Z {
+            for y in 1..(if WORLD_HALF_Y > 15 { WORLD_HALF_Y - 15 } else { WORLD_HALF_Y }) {
+                for x in 0..=WORLD_X {
+                    let noise_value = noise.noise3d( x as f64, y as f64, z as f64 );
+
+                    if noise_value > 0.85 {
+                        world_holder.set_voxel( x, y, z, Some( coal.clone() ) );
+                    }
+                }
+            }
+        }
+
+        let bedrock = dataset.voxels.get( &bedrock_key ).unwrap().clone();
+
+        for z in 0..=WORLD_Z {
+            for y in 1..3 {
+                for x in 0..=WORLD_X {
+                    let noise_value = noise.noise3d( x as f64, y as f64, z as f64 );
+
+                    if noise_value > 0.8 / y as f64 {
+                        world_holder.set_voxel( x, 3 - y, z, Some( bedrock.clone() ) );
+                    }
+                }
+            }
+        }
+
+        println!( "Drawing axies..." );
+        let axies_origin = ((WORLD_X / 2) as i32, (WORLD_HALF_Y + 15) as i32, (WORLD_Z / 2) as i32);
+        let axies_length = 5;
+        let axies_key = String::from( "axis" );
+        let axies_makers:Vec<(&str, Box<dyn Fn(u8) -> Color>, Box<dyn Fn(i32) -> (i32, i32, i32)>)> = vec![
+            ("x", Box::new( |n| Color { red:(255 / (axies_length + 1)) * (n + 2), green:0, blue:0 } ), Box::new( |n| (n - axies_length as i32 / 2, 0, 0) )),
+            ("y", Box::new( |n| Color { red:0, green:(255 / (axies_length + 1)) * (n + 2), blue:0 } ), Box::new( |n| (0, n - axies_length as i32 / 2, 0) )),
+            ("z", Box::new( |n| Color { red:0, green:0, blue:(255 / (axies_length + 1)) * (n + 2) } ), Box::new( |n| (0, 0, n - axies_length as i32 / 2) )),
+        ];
+
+        dataset.materials.insert( axies_key.clone(), Rc::new( Material { _density:1000 } ) );
+
+        if WORLD_X > 15 {
+            for axis in axies_makers {
+                let key = format!( "{}_{}", &axies_key, axis.0 );
+
+                for n in 0..axies_length {
+                    let coords = axis.2( n as i32 );
+
+                    dataset.colors.insert( key.clone(), Rc::new( axis.1( n ) ) );
+
+                    dataset.common_voxel_dataset.insert( key.clone(), Rc::new( CommonVoxelData {
+                        _color: dataset.colors.get( &key ).unwrap().clone(),
+                        _material: dataset.materials.get( &axies_key ).unwrap().clone()
+                    } ) );
+
+                    dataset.voxels.insert( key.clone(), Rc::new( Voxel {
+                        _common_data: dataset.common_voxel_dataset.get( &key ).unwrap().clone(),
+                        _individual_data:vec![]
+                    } ) );
+
+                    world_holder.set_voxel(
+                        (axies_origin.0 + coords.0) as u32, (axies_origin.1 + coords.1) as u32, (axies_origin.2 + coords.2) as u32,
+                        Some( dataset.voxels.get( &key ).unwrap().clone() )
+                    );
+                }
+            }
+
+            world_holder.set_voxel( 0, 0, 0, Some( dataset.voxels.get( &format!( "{}_{}", &axies_key, "x" ) ).unwrap().clone() ) );
+            world_holder.set_voxel( WORLD_X, WORLD_Y, WORLD_Z, Some( dataset.voxels.get( &format!( "{}_{}", &axies_key, "y" ) ).unwrap().clone() ) );
+        }
+
+
+        dataset
     }
 
     fn print_num( num:u32, max:u32 ) {

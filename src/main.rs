@@ -41,8 +41,8 @@ fn render_world() {
     let mut simulation = Simulation::new().unwrap();
     // simulation.update_instances_with_defaults();
     simulation.move_camera_to(
-        (WORLD_X as f32 / 2.0, WORLD_Y as f32, WORLD_Z as f32 * 2.0),
-        (WORLD_X as f32 / 2.0, 0.0, 0.0)
+        (WORLD_X as f32 / 2.0, if WORLD_Y > 175 { 175 } else { WORLD_Y } as f32, 32f32.min( WORLD_Z as f32 * 2.0 )),
+        (WORLD_X as f32 / 2.0, 0.0, WORLD_Z as f32)
     );
     simulation.update_instances_with_world_holder( world );
     simulation.run_window_event_loop();
