@@ -7,7 +7,7 @@ pub mod voxel_hasher;
 
 use std::time::Instant;
 
-use tester::Tester;
+use tester::{Tester, WORLD_X};
 
 #[allow(unused_imports)]
 use octree::Octree;
@@ -29,7 +29,7 @@ pub fn generate_world() -> impl WorldHolder {
 
     // let mut world_struct = VoxelMap::new();
     // let mut world_struct = VoxelList::new();
-    let mut world_struct = Octree::new( 9 );
+    let mut world_struct = Octree::from_max_size( WORLD_X );
     // let mut world_struct = Octree::new( 11 );
     // let mut world_struct = Octree::new( 18 );
     // let mut world_struct = VoxelHashMap::new();

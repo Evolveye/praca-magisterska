@@ -10,15 +10,16 @@ use crate::{
 
 use super::quadtree::{Quadtree, QuadtreeBranch, QuadtreeNode};
 
-// pub const RENDER_DISTANCE:u32 = 32 * 16;
-pub const RENDER_DISTANCE:u32 = 32 * 8;
-pub const WORLD_Z:u32 = RENDER_DISTANCE * 2 + 1;
+// pub const RENDER_DISTANCE:u32 = 32 * 16 * 2 + 1;
+// pub const RENDER_DISTANCE:u32 = 255;
+// pub const WORLD_X:u32 = 255;
+pub const WORLD_X:u32 = 15;
 // pub const WORLD_Y:u32 = 10;
 // pub const WORLD_Y:u32 = 7;
-pub const WORLD_Y:u32 = 250;
+pub const WORLD_Y:u32 = 15;
 // pub const WORLD_Y:u32 = 384;
 const WORLD_HALF_Y:u32 = WORLD_Y / 2;
-pub const WORLD_X:u32 = RENDER_DISTANCE * 2 + 1;
+pub const WORLD_Z:u32 = WORLD_X;
 
 pub struct TestDataset {
     pub materials: HashMap<String, Rc<Material>>,
@@ -174,8 +175,8 @@ impl Tester {
     pub fn fill_50pc_realistically( world_holder:&mut dyn WorldHolder ) -> TestDataset {
         let noise = SimplexNoise::new( 50 );
         let max_depth = Quadtree::get_max_depth_for( WORLD_X );
-        let noise_frequency = 0.007;
-        let generate_value = |x, z| noise.noise3d( (x as f64 + 206.0) * noise_frequency, 1.0, (z as f64 + 140.0)  * noise_frequency );
+        let noise_frequency = 0.05;
+        let generate_value = |x, z| noise.noise3d( x as f64 * noise_frequency, 1.0, z as f64  * noise_frequency );
 
         println!( "Filling quadtree with max depth = {}...", max_depth );
         let quadtree = Quadtree::from_terrain_generation( max_depth, &generate_value );
@@ -186,9 +187,10 @@ impl Tester {
             let current_min = (WORLD_HALF_Y as i32 + multiplied_noise as i32) as u32;
             if current_min < offset.1 { return offset.1 }
 
-            // println!( "current_min={}, noise_value={}", current_min, noise_value );
+            // println!( "multiplied_noise={}, green={}", multiplied_noise, 64 + (multiplied_noise * 15.0) as i8 );
             let size = size - 1;
-            let grass_color = Color { red:10, green:128 + (multiplied_noise * 5.0) as u8, blue:10 };
+            let green = (127 + (multiplied_noise * 15.0) as i16) as u8;
+            let grass_color = Color { red:if current_min % 2 == 0 { 10 } else { 128 }, green, blue:10 };
             let to = (offset.0 + size, current_min, offset.2 + size);
 
             Self::fill_with( offset, to, world_holder, (format!( "grass_{}", current_min ), grass_color) );

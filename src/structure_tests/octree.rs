@@ -21,6 +21,10 @@ impl Direction {
         /* opposite to BACK   */  [4, 5, 6, 7],
     ];
 
+    fn get_octree_node_indices_for_opposite_side( direction:u8 ) -> [usize; 4] {
+        Direction::OCTREE_NODE_INDICES[ direction as usize - 1 ]
+    }
+
     fn split_branch_point_into_chilren_by_direction( direction:u8, point:(u32, u32, u32), size:u32 ) -> [(u32, u32, u32); 4] {
         match direction {
             1 | 2 => [
@@ -327,6 +331,10 @@ impl<T> Octree<T> {
         }
     }
 
+    pub fn from_max_size( max_size:u32 ) -> Self {
+        Self::new( Self::get_max_depth_for( max_size ) )
+    }
+
     pub fn insert( &mut self, x:u32, y:u32, z:u32, value:Rc<T> ) {
         self.root.insert( self.max_depth, x, y, z, value )
     }
@@ -348,6 +356,10 @@ impl<T> Octree<T> {
     pub fn count_leaves(&self) -> usize {
         self.root.count_leaves()
     }
+
+    pub fn get_max_depth_for( n:u32 ) -> u8 {
+        (32 - (n - 1).leading_zeros()) as u8
+    }
 }
 
 impl Octree<Voxel> {
@@ -355,12 +367,13 @@ impl Octree<Voxel> {
         struct Point {
             coords: (u32,u32,u32),
             depth: u8,
-            check_dir: u8
+            check_dir: u8,
+            source_size: u32,
         }
 
         let mut result = HashMap::new();
         let mut points_memory = HashMap::<(u32, u32, u32), u8>::new();
-        let mut points = VecDeque::from([ Point { coords:initial_point, depth:self.max_depth, check_dir:Direction::UNSPECIFIED } ]);
+        let mut points = VecDeque::from([ Point { coords:initial_point, depth:self.max_depth, check_dir:Direction::UNSPECIFIED, source_size:0 } ]);
         let mut path = vec![(&self.root, (0, 0, 0))];
         // let debug_coord = (0, 3, 5);
         let debug_coord = (0, 3, 4);
@@ -431,6 +444,7 @@ impl Octree<Voxel> {
                             coords,
                             check_dir: point.check_dir,
                             depth: point.depth + 1,
+                            source_size: 1 << (reversed_depth - 1),
                         } );
                     }
 
@@ -484,19 +498,54 @@ impl Octree<Voxel> {
 
             // Fill results if have value
             if let Some( data ) = leaf_value {
-                let size = 1 << reversed_depth;
-                let decremented_size = size - 1;
+                let coords = point.coords;
 
-                for x in 0..size {
-                    for y in 0..size {
-                        for z in 0..size {
-                            if x == 0 || y == 0 || z == 0 || x == decremented_size || y == decremented_size || z == decremented_size {
-                                let coord = (node_offset.0 + x, node_offset.1 + y, node_offset.2 + z);
-                                result.entry( coord ).or_insert_with( || data.clone() );
+                match point.check_dir {
+                    1 | 2 => {
+                        let x = node_offset.0 + if point.check_dir == 2 { 0 } else { leaf_size - 1 };
+
+                        for y in 0..point.source_size {
+                            for z in 0..point.source_size {
+                                result.entry( (x, point.coords.1 + y, point.coords.2 + z) ).or_insert_with( || data.clone() );
                             }
                         }
                     }
+
+                    3 | 4 => {
+                        let y = node_offset.1 + if point.check_dir == 3 { 0 } else { leaf_size - 1 };
+
+                        for x in 0..point.source_size {
+                            for z in 0..point.source_size {
+                                result.entry( (point.coords.0 + x, y, point.coords.2 + z) ).or_insert_with( || data.clone() );
+                            }
+                        }
+                    }
+
+                    5 | 6 => {
+                        let z = node_offset.2 + if point.check_dir == 5 { 0 } else { leaf_size - 1 };
+
+                        for x in 0..point.source_size {
+                            for y in 0..point.source_size {
+                                result.entry( (point.coords.0 + x, point.coords.1 + y, z) ).or_insert_with( || data.clone() );
+                            }
+                        }
+                    }
+
+                    _ => {}
                 }
+
+
+                // let decremented_size = leaf_size - 1;
+                // for x in 0..leaf_size {
+                //     for y in 0..leaf_size {
+                //         for z in 0..leaf_size {
+                //             if x == 0 || y == 0 || z == 0 || x == decremented_size || y == decremented_size || z == decremented_size {
+                //                 let coord = (node_offset.0 + x, node_offset.1 + y, node_offset.2 + z);
+                //                 result.entry( coord ).or_insert_with( || data.clone() );
+                //             }
+                //         }
+                //     }
+                // }
 
                 // println!( "Collecting leaf, n.offset={:?}, p.coords={:?}", node_offset, point.coords );
 
@@ -513,24 +562,24 @@ impl Octree<Voxel> {
             // }
 
             if point.check_dir != Direction::RIGHT && node_offset.0 > 0 {
-                next_points.push( Point { depth, coords:(node_offset.0 - 1,         node_offset.1, node_offset.2), check_dir:Direction::LEFT } )
+                next_points.push( Point { depth, source_size:leaf_size, coords:(node_offset.0 - 1,         node_offset.1, node_offset.2), check_dir:Direction::LEFT } )
             }
             if point.check_dir != Direction::LEFT && node_offset.0 < root_size - leaf_size {
-                next_points.push( Point { depth, coords:(node_offset.0 + leaf_size, node_offset.1, node_offset.2), check_dir:Direction::RIGHT } )
+                next_points.push( Point { depth, source_size:leaf_size, coords:(node_offset.0 + leaf_size, node_offset.1, node_offset.2), check_dir:Direction::RIGHT } )
             }
 
             if point.check_dir != Direction::TOP && node_offset.1 > 0 {
-                next_points.push( Point { depth, coords:(node_offset.0, node_offset.1 - 1,         node_offset.2), check_dir:Direction::BOTTOM } )
+                next_points.push( Point { depth, source_size:leaf_size, coords:(node_offset.0, node_offset.1 - 1,         node_offset.2), check_dir:Direction::BOTTOM } )
             }
             if point.check_dir != Direction::BOTTOM && node_offset.1 < root_size - leaf_size {
-                next_points.push( Point { depth, coords:(node_offset.0, node_offset.1 + leaf_size,  node_offset.2), check_dir:Direction::TOP } )
+                next_points.push( Point { depth, source_size:leaf_size, coords:(node_offset.0, node_offset.1 + leaf_size,  node_offset.2), check_dir:Direction::TOP } )
             }
 
             if point.check_dir != Direction::FRONT && node_offset.2 > 0 {
-                next_points.push( Point { depth, coords:(node_offset.0, node_offset.1, node_offset.2 - 1        ), check_dir:Direction::BACK } )
+                next_points.push( Point { depth, source_size:leaf_size, coords:(node_offset.0, node_offset.1, node_offset.2 - 1        ), check_dir:Direction::BACK } )
             }
             if point.check_dir != Direction::BACK && node_offset.2 < root_size - leaf_size {
-                next_points.push( Point { depth, coords:(node_offset.0, node_offset.1, node_offset.2 + leaf_size), check_dir:Direction::FRONT } )
+                next_points.push( Point { depth, source_size:leaf_size, coords:(node_offset.0, node_offset.1, node_offset.2 + leaf_size), check_dir:Direction::FRONT } )
             }
 
 
