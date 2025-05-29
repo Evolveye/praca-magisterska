@@ -376,7 +376,11 @@ impl Octree<Voxel> {
         let mut points = VecDeque::from([ Point { coords:initial_point, depth:self.max_depth, check_dir:Direction::UNSPECIFIED, source_size:0 } ]);
         let mut path = vec![(&self.root, (0, 0, 0))];
         // let debug_coord = (0, 3, 5);
-        let debug_coord = (0, 3, 4);
+        // let debug_coord = (1, 10, 2);
+        // let debug_coord = (15, 9, 12);
+        let debug_coord = (4, 13, 0);
+        let is_memory_cleaning = true;
+        // let debug_coord = (12, 14, 8); // 10, 14, 8; 11, 14, 9
         // let debug_coord = (26, 2, 22);
         // let debug_coord = (27, 28, 12);
         // let debug_coord = (28, 28, 12);
@@ -384,9 +388,14 @@ impl Octree<Voxel> {
 
         // Collecting leaf, n.offset=(0, 3
         //
+        let mut iterations = 0;
 
         'points: while let Some( point ) = points.pop_front() {
-            // println!( " 0. - - - p.coords={:?}", point.coords );
+            iterations += 1;
+            if iterations > 10_000 { break }
+            // if points.iter().any( |p| p.coords.0 == debug_coord.0 && p.coords.1 == debug_coord.1 && p.coords.2 == debug_coord.2 ) {
+            //     println!( "0. Debug point in points vector {:?}", debug_coord );
+            // }
 
             // Going up in path vector
             while {
@@ -410,7 +419,7 @@ impl Octree<Voxel> {
 
 
             // Going down in path vector
-            // println!( "1. Outer: p.coords={:?} p.depth={:?} p.dir={:?}", point.coords, point.depth, Direction::get_dir_name( point.check_dir ) );
+            println!( "1. Outer: p.coords={:?} p.depth={:?} p.dir={:?} | debug_count={:?}", point.coords, point.depth, Direction::get_dir_name( point.check_dir ), points_memory.get( &debug_coord ) );
 
             let (mut node_ptr, mut node_offset) = path.last().unwrap();
 
@@ -429,16 +438,39 @@ impl Octree<Voxel> {
                     //     node_offset, point.coords, Direction::get_dir_name( point.check_dir ), point.depth, depth, 1 << reversed_depth,
                     //     Direction::split_branch_point_into_chilren_by_direction( point.check_dir, point.coords, 1 << (reversed_depth - 1) )
                     // );
-                    // if node_offset.0 == debug_coord.0 && node_offset.1 == debug_coord.1 && node_offset.2 == debug_coord.2 {
+                    // if is_node_offset_debug {
                     // }
 
                     for coords in Direction::split_branch_point_into_chilren_by_direction( point.check_dir, point.coords, 1 << (reversed_depth - 1) ) { // Every node on the side}
-                        // if coords.0 == debug_coord.0 && coords.1 == debug_coord.1 && coords.2 == debug_coord.2 {
-                        //     println!(
-                        //         "insertion from division | parent={:?}; next={:?}; p.coords={:?}; p.check_dir={:?}; p.depth={}, parent_size={}",
-                        //         node_offset, coords, point.coords, Direction::get_dir_name( point.check_dir ), point.depth, 1 << reversed_depth
-                        //     )
+                        let is_coords_debug = coords.0 == debug_coord.0 && coords.1 == debug_coord.1 && coords.2 == debug_coord.2;
+
+                        // if points_memory.contains_key( &coords ) {
+                        //     if match point.check_dir {
+                        //         1 => points_memory.contains_key( &(coords.0 + 1, coords.1, coords.2) ),
+                        //         2 => points_memory.contains_key( &(coords.0 - 1, coords.1, coords.2) ),
+                        //         3 => points_memory.contains_key( &(coords.0, coords.1 - 1, coords.2) ),
+                        //         4 => points_memory.contains_key( &(coords.0, coords.1 + 1, coords.2) ),
+                        //         5 => points_memory.contains_key( &(coords.0, coords.1, coords.2 + 1) ),
+                        //         6 => points_memory.contains_key( &(coords.0, coords.1, coords.2 - 1) ),
+                        //         _ => unreachable!(),
+                        //     } {
+                        //         if is_coords_debug {
+                        //             println!(
+                        //                 " - division skiping | parent={:?}; next={:?}; p.coords={:?}; p.check_dir={:?}; p.depth={}, parent_size={}",
+                        //                 node_offset, coords, point.coords, Direction::get_dir_name( point.check_dir ), point.depth, 1 << reversed_depth
+                        //             )
+                        //         }
+
+                        //         continue
+                        //     }
                         // }
+
+                        if is_coords_debug {
+                            println!(
+                                " - division insertion | parent={:?}; next={:?}; opposite={:?}, p.coords={:?}; p.check_dir={:?}; p.depth={}, parent_size={}",
+                                node_offset, coords, (coords.0 - 1, coords.1, coords.2), point.coords, Direction::get_dir_name( point.check_dir ), point.depth, 1 << reversed_depth
+                            )
+                        }
 
                         points.push_front( Point {
                             coords,
@@ -464,22 +496,21 @@ impl Octree<Voxel> {
 
 
 
-            // Continue if node offset is processed
-            if result.contains_key( &point.coords ) {
-                // println!( "Skip result n.offset={:?} p.coords={:?}, {:?}, {}, size={}", node_offset, point.coords, point.check_dir, point.depth, 1 << (self.max_depth - (path.len() as u8 - 1)) );
-                continue
-            }
+            let is_debug_point = point.coords.0 == debug_coord.0 && point.coords.1 == debug_coord.1 && point.coords.2 == debug_coord.2;
+            let is_node_offset_debug = node_offset.0 == debug_coord.0 && node_offset.1 == debug_coord.1 && node_offset.2 == debug_coord.2;
+
 
             if let Some( count ) = points_memory.get_mut( &point.coords ) {
-                // if point.coords.0 == debug_coord.0 && point.coords.1 == debug_coord.1 && point.coords.2 == debug_coord.2 {
-                //     println!( "count of debug {:?} (with depth = {}) before decrement = {}", point.coords, point.depth, count )
+                // println!( " - found in memory {:?} (with depth = {}) before decrement = {}", point.coords, point.depth, count );
+                println!( " - !!! removed decrement" );
+                // if is_debug_point {
                 // }
 
                 // if *count == 0 {
                 //     unreachable!( "Count cannnot be zero here! p.coords={:?}; count={}", point.coords, count )
                 // }
 
-                *count -= 1;
+                // *count -= 1;
                 continue;
             }
 
@@ -488,7 +519,7 @@ impl Octree<Voxel> {
             let depth = path.len() as u8 - 1;
             let reversed_depth = self.max_depth - depth;
             let leaf_size = 1 << reversed_depth;
-            // println!( "2. Found: leaf_offset={:?} leaf_r_depth={:?}, leaf_size={:?} value={:?}", node_offset, reversed_depth, leaf_size, node_ptr );
+            println!( "2. Found: leaf_offset={:?} leaf_r_depth={:?}, leaf_size={:?} p.dir={:?}, value={:?}, is_node_offset_debug={}", node_offset, reversed_depth, leaf_size, Direction::get_dir_name( point.check_dir ), node_ptr, is_node_offset_debug );
 
             let leaf_value = match node_ptr {
                 OctreeNode::Leaf( opt ) => opt,
@@ -498,35 +529,83 @@ impl Octree<Voxel> {
 
             // Fill results if have value
             if let Some( data ) = leaf_value {
-                let coords = point.coords;
+                println!( " - Found leaf" );
 
                 match point.check_dir {
                     1 | 2 => {
                         let x = node_offset.0 + if point.check_dir == 2 { 0 } else { leaf_size - 1 };
+                        let origin_x = if point.check_dir == 1 { node_offset.0 + leaf_size } else { node_offset.0 - 1 };
+
+                        println!( "   * x={}, origin_x={}", x, origin_x );
 
                         for y in 0..point.source_size {
                             for z in 0..point.source_size {
                                 result.entry( (x, point.coords.1 + y, point.coords.2 + z) ).or_insert_with( || data.clone() );
+
+                                let origin_coord = (origin_x, point.coords.1 + y, point.coords.2 + z);
+                                if origin_coord.0 == debug_coord.0 && origin_coord.1 == debug_coord.1 && origin_coord.2 == debug_coord.2 {
+                                    println!( " - debug from fullfilled leaf {:?}", origin_coord );
+                                }
+
+                                if let Some( count ) = points_memory.get_mut( &origin_coord ) {
+                                    if is_memory_cleaning && *count == 1 {
+                                        points_memory.remove( &origin_coord );
+                                    } else {
+                                        *count -= 1;
+                                    }
+                                }
                             }
                         }
                     }
 
                     3 | 4 => {
                         let y = node_offset.1 + if point.check_dir == 3 { 0 } else { leaf_size - 1 };
+                        let origin_y = if point.check_dir == 3 { node_offset.1 - 1 } else { node_offset.1 + leaf_size };
+
+                        println!( "   * y={}, origin_y={}", y, origin_y );
 
                         for x in 0..point.source_size {
                             for z in 0..point.source_size {
                                 result.entry( (point.coords.0 + x, y, point.coords.2 + z) ).or_insert_with( || data.clone() );
+
+                                let origin_coord = (point.coords.0 + x, origin_y, point.coords.2 + z);
+                                if origin_coord.0 == debug_coord.0 && origin_coord.1 == debug_coord.1 && origin_coord.2 == debug_coord.2 {
+                                    println!( " - debug from fullfilled leaf {:?}", origin_coord );
+                                }
+
+                                if let Some( count ) = points_memory.get_mut( &origin_coord ) {
+                                    if is_memory_cleaning && *count == 1 {
+                                        points_memory.remove( &origin_coord );
+                                    } else {
+                                        *count -= 1;
+                                    }
+                                }
                             }
                         }
                     }
 
                     5 | 6 => {
                         let z = node_offset.2 + if point.check_dir == 5 { 0 } else { leaf_size - 1 };
+                        let origin_z = if point.check_dir == 5 { node_offset.2 - 1 } else { node_offset.2 + leaf_size };
+
+                        println!( "   * z={}, origin_z={}", z, origin_z );
 
                         for x in 0..point.source_size {
                             for y in 0..point.source_size {
                                 result.entry( (point.coords.0 + x, point.coords.1 + y, z) ).or_insert_with( || data.clone() );
+
+                                let origin_coord = (point.coords.0 + x, point.coords.1 + y, origin_z);
+                                if origin_coord.0 == debug_coord.0 && origin_coord.1 == debug_coord.1 && origin_coord.2 == debug_coord.2 {
+                                    println!( " - debug from fullfilled leaf {:?}", origin_coord );
+                                }
+
+                                if let Some( count ) = points_memory.get_mut( &origin_coord ) {
+                                    if is_memory_cleaning && *count == 1 {
+                                        points_memory.remove( &origin_coord );
+                                    } else {
+                                        *count -= 1;
+                                    }
+                                }
                             }
                         }
                     }
@@ -557,166 +636,509 @@ impl Octree<Voxel> {
             let root_size = 1 << self.max_depth;
             let mut next_points = Vec::with_capacity( 6 );
 
-            // if node_offset.0 == debug_coord.0 && node_offset.1 == debug_coord.1 && node_offset.2 == debug_coord.2 {
+            // if is_node_offset_debug {
             //     println!( "debug point" )
             // }
 
-            if point.check_dir != Direction::RIGHT && node_offset.0 > 0 {
+            if node_offset.0 > 0 {
                 next_points.push( Point { depth, source_size:leaf_size, coords:(node_offset.0 - 1,         node_offset.1, node_offset.2), check_dir:Direction::LEFT } )
             }
-            if point.check_dir != Direction::LEFT && node_offset.0 < root_size - leaf_size {
+            if node_offset.0 < root_size - leaf_size {
                 next_points.push( Point { depth, source_size:leaf_size, coords:(node_offset.0 + leaf_size, node_offset.1, node_offset.2), check_dir:Direction::RIGHT } )
             }
 
-            if point.check_dir != Direction::TOP && node_offset.1 > 0 {
+            if node_offset.1 > 0 {
                 next_points.push( Point { depth, source_size:leaf_size, coords:(node_offset.0, node_offset.1 - 1,         node_offset.2), check_dir:Direction::BOTTOM } )
             }
-            if point.check_dir != Direction::BOTTOM && node_offset.1 < root_size - leaf_size {
+            if node_offset.1 < root_size - leaf_size {
                 next_points.push( Point { depth, source_size:leaf_size, coords:(node_offset.0, node_offset.1 + leaf_size,  node_offset.2), check_dir:Direction::TOP } )
             }
 
-            if point.check_dir != Direction::FRONT && node_offset.2 > 0 {
+            if node_offset.2 > 0 {
                 next_points.push( Point { depth, source_size:leaf_size, coords:(node_offset.0, node_offset.1, node_offset.2 - 1        ), check_dir:Direction::BACK } )
             }
-            if point.check_dir != Direction::BACK && node_offset.2 < root_size - leaf_size {
+            if node_offset.2 < root_size - leaf_size {
                 next_points.push( Point { depth, source_size:leaf_size, coords:(node_offset.0, node_offset.1, node_offset.2 + leaf_size), check_dir:Direction::FRONT } )
             }
 
+            let is_debug_in_nexts = next_points.iter().any( |p| p.coords.0 == debug_coord.0 && p.coords.1 == debug_coord.1 && p.coords.2 == debug_coord.2 );
+            let serialized_next_points = next_points.iter().map( |p| (p.coords, Direction::get_dir_name( p.check_dir )) ).collect::<Vec<_>>();
+
+            if is_debug_in_nexts {
+                println!( " - Next coords; node_offset={:?}; size={}, nexts={:?}", node_offset, leaf_size, next_points.iter().map( |p| (p.coords, Direction::get_dir_name( p.check_dir )) ).collect::<Vec<_>>() );
+            }
+            if is_node_offset_debug {
+                println!(
+                    " - Next debug point coords; node_offset={:?}; size={}, nexts={:?}",
+                    node_offset, leaf_size, serialized_next_points
+                );
+            }
 
             // Memoize outer children
             if leaf_size == 1 {
-                points_memory.insert( node_offset, if point.check_dir == Direction::UNSPECIFIED { 6 } else { 5 } );
+                let max_offset = root_size - 1;
+                let count = if node_offset.0 == 0 || node_offset.0 == max_offset {
+                    if node_offset.1 == 0 || node_offset.1 == max_offset {
+                        if node_offset.2 == 0 || node_offset.2 == max_offset { 3 } else { 4 }
+                    } else {
+                        if node_offset.2 == 0 || node_offset.2 == max_offset { 4 } else { 5 }
+                    }
+                } else {
+                    if node_offset.1 == 0 || node_offset.1 == max_offset {
+                        if node_offset.2 == 0 || node_offset.2 == max_offset { 4 } else { 5 }
+                    } else {
+                        if node_offset.2 == 0 || node_offset.2 == max_offset { 5 } else { 6 }
+                    }
+                };
 
-                // if node_offset.0 == debug_coord.0 && node_offset.1 == debug_coord.1 && node_offset.2 == debug_coord.2 {
-                // // if points_memory.get( &debug_coord ).is_some() {
-                //     println!(
-                //         "insertion into memory {:?} = {:?}; node.offset = {:?}; point.coord = {:?}, point.dir = {} [x1]",
-                //         debug_coord, points_memory.get( &debug_coord ), node_offset, point.coords, point.check_dir
-                //     );
-                // }
+                points_memory.insert( node_offset, count );
+
+                if node_offset.0 == debug_coord.0 && node_offset.1 == debug_coord.1 && node_offset.2 == debug_coord.2 {
+                // if points_memory.get( &debug_coord ).is_some() {
+                    println!(
+                        "insertion into memory {:?} = {:?}; node.offset = {:?}; point.coord = {:?}, point.dir = {} [x1]",
+                        debug_coord, points_memory.get( &debug_coord ), node_offset, point.coords, point.check_dir
+                    );
+                }
             } else if leaf_size == 2 {
                 points_memory.reserve( 8 );
 
+                let max_offset = root_size - 2;
+                let left_minus = if node_offset.0 == 0 { 1 } else { 0 };
+                let right_minus = if node_offset.0 == max_offset { 1 } else { 0 };
+                let top_minus = if node_offset.1 == max_offset { 1 } else { 0 };
+                let bottom_minus = if node_offset.1 == 0 { 1 } else { 0 };
+                let back_minus = if node_offset.2 == 0 { 1 } else { 0 };
+                let front_minus = if node_offset.2 == max_offset { 1 } else { 0 };
+
                 let next_memory = HashMap::from([
-                    (node_offset, 3),
-                    ((node_offset.0 + 1,   node_offset.1,      node_offset.2),     3),
-                    ((node_offset.0,       node_offset.1 + 1,  node_offset.2),     3),
-                    ((node_offset.0 + 1,   node_offset.1 + 1,  node_offset.2),     3),
-                    ((node_offset.0,       node_offset.1,      node_offset.2 + 1), 3),
-                    ((node_offset.0 + 1,   node_offset.1,      node_offset.2 + 1), 3),
-                    ((node_offset.0,       node_offset.1 + 1,  node_offset.2 + 1), 3),
-                    ((node_offset.0 + 1,   node_offset.1 + 1,  node_offset.2 + 1), 3),
+                    (node_offset, 3 - left_minus - bottom_minus - back_minus),
+                    ((node_offset.0 + 1,   node_offset.1,      node_offset.2),     3 - right_minus - bottom_minus - back_minus),
+                    ((node_offset.0,       node_offset.1 + 1,  node_offset.2),     3 - left_minus - top_minus - back_minus),
+                    ((node_offset.0 + 1,   node_offset.1 + 1,  node_offset.2),     3 - right_minus - top_minus - back_minus),
+                    ((node_offset.0,       node_offset.1,      node_offset.2 + 1), 3 - left_minus - bottom_minus - front_minus),
+                    ((node_offset.0 + 1,   node_offset.1,      node_offset.2 + 1), 3 - right_minus - bottom_minus - front_minus),
+                    ((node_offset.0,       node_offset.1 + 1,  node_offset.2 + 1), 3 - left_minus - top_minus - front_minus),
+                    ((node_offset.0 + 1,   node_offset.1 + 1,  node_offset.2 + 1), 3 - right_minus - top_minus - front_minus),
                 ]);
 
-                // if next_memory.get( &debug_coord ).is_some() {
-                //     println!( "{:?}", next_memory );
-                //     println!(
-                //         "insertion into memory {:?} = {:?}; node.offset = {:?}; point.coord = {:?}, point.dir = {} size={}",
-                //         debug_coord, next_memory.get( &debug_coord ), node_offset, point.coords, Direction::get_dir_name( point.check_dir ), leaf_size
-                //     );
-                // }
+                if next_memory.get( &debug_coord ).is_some() {
+                    println!( "next points={:?}", serialized_next_points );
+                    println!( "next_memory={:?}", next_memory );
+                    println!( "left_minus={}, right_minus={}, top_minus={}, bottom_minus={}, back_minus={}, front_minus={}", left_minus, right_minus, top_minus, bottom_minus, back_minus, front_minus );
+                    println!(
+                        "insertion into memory {:?} = {:?}; node.offset = {:?}; point.coord = {:?}, point.dir = {} size={}",
+                        debug_coord, next_memory.get( &debug_coord ), node_offset, point.coords, Direction::get_dir_name( point.check_dir ), leaf_size
+                    );
+                }
 
                 points_memory.extend( next_memory );
             } else {
+                let boundary_size = root_size - leaf_size;
                 let boundary_range = [0, leaf_size - 1];
+                let max_offset = root_size - 1;
+                let max_leaf_offset = leaf_size - 1;
                 let internal_size = leaf_size - 2;
+
+                let border_x_left = node_offset.0 == 0;
+                let border_x_right = node_offset.0 == boundary_size;
+                let border_y_top = node_offset.1 == boundary_size;
+                let border_y_bottom = node_offset.1 == 0;
+                let border_z_front = node_offset.2 == boundary_size;
+                let border_z_back = node_offset.2 == 0;
+
+                if node_offset.0 == debug_coord.0 && node_offset.1 == debug_coord.1 && node_offset.2 == debug_coord.2 {
+                    println!( "debug point {:?}, size={}", node_offset, leaf_size );
+                }
 
                 points_memory.reserve( (leaf_size * leaf_size * leaf_size) as usize - (internal_size * internal_size * internal_size) as usize );
                 let mut next_memory = HashMap::new();
 
-                for x in boundary_range {
-                    for y in 1..leaf_size-1 {
-                        for z in 1..leaf_size-1 {
-                            next_memory.insert((node_offset.0 + x, node_offset.1 + y, node_offset.2 + z ), 1 );
+                if !border_x_left {
+                    for y in 1..max_leaf_offset {
+                        for z in 1..max_leaf_offset {
+                            next_memory.insert( (node_offset.0, node_offset.1 + y, node_offset.2 + z), 1 );
+                        }
+                    }
+                }
+                if !border_x_right {
+                    for y in 1..max_leaf_offset {
+                        for z in 1..max_leaf_offset {
+                            next_memory.insert( (node_offset.0 + max_leaf_offset, node_offset.1 + y, node_offset.2 + z), 1 );
                         }
                     }
                 }
 
-                for x in 1..leaf_size-1 {
-                    for y in boundary_range {
-                        for z in 1..leaf_size-1 {
-                            next_memory.insert((node_offset.0 + x, node_offset.1 + y, node_offset.2 + z ), 1 );
+                if !border_y_bottom {
+                    for x in 1..max_leaf_offset {
+                        for z in 1..max_leaf_offset {
+                            next_memory.insert((node_offset.0 + x, node_offset.1, node_offset.2 + z ), 1 );
+                        }
+                    }
+                }
+                if !border_y_top {
+                    for x in 1..max_leaf_offset {
+                        for z in 1..max_leaf_offset {
+                            next_memory.insert((node_offset.0 + x, node_offset.1 + max_leaf_offset, node_offset.2 + z ), 1 );
                         }
                     }
                 }
 
-                for x in 1..leaf_size-1 {
-                    for y in 1..leaf_size-1 {
-                        for z in boundary_range {
-                            next_memory.insert((node_offset.0 + x, node_offset.1 + y, node_offset.2 + z ), 1 );
+                if !border_z_front {
+                    for x in 1..max_leaf_offset {
+                        for y in 1..max_leaf_offset {
+                            next_memory.insert((node_offset.0 + x, node_offset.1 + y, node_offset.2 + max_leaf_offset ), 1 );
                         }
                     }
                 }
-
-                for x in boundary_range {
-                    for y in boundary_range {
-                        for z in 1..leaf_size-1 {
-                            next_memory.insert((node_offset.0 + x, node_offset.1 + y, node_offset.2 + z ), 2 );
-                        }
-                    }
-                }
-
-                for x in boundary_range {
-                    for y in 1..leaf_size-1 {
-                        for z in boundary_range {
-                            next_memory.insert((node_offset.0 + x, node_offset.1 + y, node_offset.2 + z ), 2 );
-                        }
-                    }
-                }
-
-                for x in 1..leaf_size-1 {
-                    for y in boundary_range {
-                        for z in boundary_range {
-                            next_memory.insert((node_offset.0 + x, node_offset.1 + y, node_offset.2 + z ), 2 );
+                if !border_z_back {
+                    for x in 1..max_leaf_offset {
+                        for y in 1..max_leaf_offset {
+                            next_memory.insert((node_offset.0 + x, node_offset.1 + y, node_offset.2 ), 1 );
                         }
                     }
                 }
 
                 for x in boundary_range {
                     for y in boundary_range {
-                        for z in boundary_range {
-                            next_memory.insert((node_offset.0 + x, node_offset.1 + y, node_offset.2 + z ), 3 );
+                        let singular_cell_x = node_offset.0 + x;
+                        let singular_cell_y = node_offset.1 + y;
+                        let count = if singular_cell_x == 0 || singular_cell_x == max_offset {
+                            if singular_cell_y == 0 || singular_cell_y == max_offset { 0 } else { 1 }
+                        } else {
+                            if singular_cell_y == 0 || singular_cell_y == max_offset { 1 } else { 2 }
+                        };
+
+                        if count != 0 {
+                            for z in 1..max_leaf_offset {
+                                next_memory.insert((node_offset.0 + x, node_offset.1 + y, node_offset.2 + z ), count );
+                            }
                         }
                     }
                 }
+
+                for x in boundary_range {
+                    for z in boundary_range {
+                        let singular_cell_x = node_offset.0 + x;
+                        let singular_cell_z = node_offset.2 + z;
+                        let count = if singular_cell_x == 0 || singular_cell_x == max_offset {
+                            if singular_cell_z == 0 || singular_cell_z == max_offset { 0 } else { 1 }
+                        } else {
+                            if singular_cell_z == 0 || singular_cell_z == max_offset { 1 } else { 2 }
+                        };
+
+                        if count != 0 {
+                            for y in 1..max_leaf_offset {
+                                next_memory.insert((node_offset.0 + x, node_offset.1 + y, node_offset.2 + z ), count );
+                            }
+                        }
+                    }
+                }
+
+                for y in boundary_range {
+                    for z in boundary_range {
+                        let singular_cell_y = node_offset.1 + y;
+                        let singular_cell_z = node_offset.2 + z;
+                        let count = if singular_cell_y == 0 || singular_cell_y == max_offset {
+                            if singular_cell_z == 0 || singular_cell_z == max_offset { 0 } else { 1 }
+                        } else {
+                            if singular_cell_z == 0 || singular_cell_z == max_offset { 1 } else { 2 }
+                        };
+
+                        if count != 0 {
+                            for x in 1..max_leaf_offset {
+                                next_memory.insert((node_offset.0 + x, node_offset.1 + y, node_offset.2 + z ), count );
+                            }
+                        }
+                    }
+                }
+
+                for x in boundary_range {
+                    for y in boundary_range {
+                        for z in boundary_range {
+                            let singular_cell_x = node_offset.0 + x;
+                            let singular_cell_y = node_offset.1 + y;
+                            let singular_cell_z = node_offset.2 + z;
+                            let count = if singular_cell_x == 0 || singular_cell_x == max_offset {
+                                if singular_cell_y == 0 || singular_cell_y == max_offset {
+                                    if singular_cell_z == 0 || singular_cell_z == max_offset { 0 } else { 1 }
+                                } else {
+                                    if singular_cell_z == 0 || singular_cell_z == max_offset { 1 } else { 2 }
+                                }
+                            } else {
+                                if singular_cell_y == 0 || singular_cell_y == max_offset {
+                                    if singular_cell_z == 0 || singular_cell_z == max_offset { 1 } else { 2 }
+                                } else {
+                                    if singular_cell_z == 0 || singular_cell_z == max_offset { 2 } else { 3 }
+                                }
+                            };
+
+                            next_memory.insert((node_offset.0 + x, node_offset.1 + y, node_offset.2 + z ), count );
+                        }
+                    }
+                }
+
 
                 if next_memory.get( &debug_coord ).is_some() {
-                    println!( "{:?}", next_memory );
+                    println!( "next points={:?}", serialized_next_points );
+                    println!( "max_border={}, next_memory={:?}", boundary_size, next_memory );
                     println!(
-                        "insertion into memory {:?} = {:?}; node.offset = {:?}; point.coord = {:?}, point.dir = {} [xN]",
-                        debug_coord, next_memory.get( &debug_coord ), node_offset, point.coords, point.check_dir
+                        "insertion into memory {:?} = {:?}; node.offset = {:?}, node_size={}; point.coord = {:?}, point.size={}, point.dir = {} [xN]",
+                        debug_coord, next_memory.get( &debug_coord ), node_offset, leaf_size, point.coords, point.source_size, point.check_dir
                     );
                 }
 
                 points_memory.extend( next_memory );
             }
 
+            // let boundary_size = leaf_size - 1;
+
+            // match point.check_dir {
+            //     1 | 2 => {
+            //         let x = node_offset.0 + if point.check_dir == 2 { 0 } else { boundary_size };
+
+            //         println!( "decrement memory X {:?}, p.dir={} p.source_size={}", point.coords, Direction::get_dir_name( point.check_dir ), point.source_size );
+            //         for y in 0..point.source_size {
+            //             for z in 0..point.source_size {
+            //                 let coords = (x, point.coords.1 + y, point.coords.2 + z);
+            //                 println!( " - {:?}", coords );
+            //                 *points_memory.get_mut( &coords ).unwrap() -= 1;
+            //             }
+            //         }
+            //     }
+
+            //     3 | 4 => {
+            //         let y = node_offset.1 + if point.check_dir == 3 { 0 } else { boundary_size };
+
+            //         println!( "decrement memory Y {:?}, p.dir={} p.source_size={}", point.coords, Direction::get_dir_name( point.check_dir ), point.source_size );
+            //         for x in 0..point.source_size {
+            //             for z in 0..point.source_size {
+            //                 let coords = (point.coords.0 + x, y, point.coords.2 + z);
+            //                 println!( " - coords={:?}", coords );
+            //                 *points_memory.get_mut( &coords ).unwrap() -= 1;
+            //             }
+            //         }
+            //     }
+
+            //     5 | 6 => {
+            //         let z = node_offset.2 + if point.check_dir == 5 { 0 } else { boundary_size };
+
+            //         println!( "decrement memory Z {:?}, p.dir={} p.source_size={}", point.coords, Direction::get_dir_name( point.check_dir ), point.source_size );
+            //         for x in 0..point.source_size {
+            //             for y in 0..point.source_size {
+            //                 let coords = (point.coords.0 + x, point.coords.1 + y, z);
+            //                 println!( " - coords={:?}", coords );
+            //                 *points_memory.get_mut( &coords ).unwrap() -= 1;
+            //             }
+            //         }
+            //     }
+
+            //     _ => {}
+            // }
+
+
 
             // Process siblings
+            println!( "Processing siblings | debug_count {:?}={:?}", debug_coord, points_memory.get( &debug_coord ) );
             points.reserve( next_points.len() );
 
             for next_point in next_points {
-                if result.contains_key( &next_point.coords ) {
-                    continue;
+                if is_node_offset_debug || is_debug_in_nexts {
+                    println!(
+                        " - Next for debug, np.coords={:?}, np.dir={:?}, leaf.offset={:?}, result.contains={}",
+                        next_point.coords, Direction::get_dir_name( next_point.check_dir ), node_offset, result.contains_key( &next_point.coords )
+                    );
                 }
 
-                if let Some( count ) = points_memory.get_mut( &next_point.coords ) {
-                    // if next_point.coords.0 == debug_coord.0 && next_point.coords.1 == debug_coord.1 && next_point.coords.2 == debug_coord.2 {
-                    //     println!( "count for {:?} = {:?}, np.dir={:?}, leaf.offset={:?}", next_point.coords, *count, Direction::get_dir_name( next_point.check_dir ), node_offset );
-                    // }
-                    // if *count == 0 {
-                    //     println!( "count==0, p={:?}", next_point.coords )
-                    // }
-                    *count -= 1;
-                } else {
-                    // if next_point.coords.0 == debug_coord.0 && next_point.coords.1 == debug_coord.1 && next_point.coords.2 == debug_coord.2 {
-                    //     println!( "creating point of {:?}", debug_coord )
-                    // }
+                // if result.contains_key( &next_point.coords ) {
+                //     continue;
+                // }
+
+                // if next_point.coords.0 == debug_coord.0 && next_point.coords.1 == debug_coord.1 && next_point.coords.2 == debug_coord.2 {
+                //     println!( " - count for {:?} = {:?}, np.dir={:?}, leaf.offset={:?}", next_point.coords, *count, Direction::get_dir_name( next_point.check_dir ), node_offset );
+                // }
+                // if *count == 0 {
+                //     println!( "count==0, p={:?}", next_point.coords )
+                // }
+                match next_point.check_dir {
+                    1 | 2 => {
+                        let origin_x = if next_point.check_dir == 1 { node_offset.0 } else { next_point.coords.0 - 1 };
+
+                        for y in 0..next_point.source_size {
+                            for z in 0..next_point.source_size {
+                                let origin_coord = (origin_x, next_point.coords.1 + y, next_point.coords.2 + z);
+                                let next_coord = (next_point.coords.0, next_point.coords.1 + y, next_point.coords.2 + z);
+
+                                let count_modified = if let Some( count ) = points_memory.get_mut( &next_coord ) {
+                                    println!(
+                                        "   * X count for {:?} = {:?}, np.dir={:?}, leaf.offset={:?}",
+                                        next_coord, *count, Direction::get_dir_name( next_point.check_dir ), node_offset
+                                    );
+                                    if is_memory_cleaning && *count == 1 {
+                                        points_memory.remove( &next_coord );
+                                    } else {
+                                        *count -= 1;
+                                    }
+
+                                    true
+                                // } else if result.contains_key( &next_coord ) {
+                                //     if next_coord.0 == debug_coord.0 && next_coord.1 == debug_coord.1 && next_coord.2 == debug_coord.2 {
+                                //         println!(
+                                //             "   * X found in results for debug {:?}, np.dir={:?}, leaf.offset={:?}",
+                                //             next_coord, Direction::get_dir_name( next_point.check_dir ), node_offset
+                                //         );
+                                //     }
+
+                                //     true
+                                } else {
+                                    false
+                                };
+
+                                if count_modified {
+                                    println!(
+                                        "   * origin_coord={:?} = {}",
+                                        origin_coord, points_memory.get_mut( &origin_coord ).unwrap(),
+                                    );
+
+                                    let count = points_memory.get_mut( &origin_coord ).unwrap();
+
+                                    if is_memory_cleaning && *count == 1 {
+                                        points_memory.remove( &next_coord );
+                                    } else {
+                                        *count -= 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    3 | 4 => {
+                        let origin_y = if next_point.check_dir == 3 { next_point.coords.1 - 1 } else { node_offset.1 };
+
+                        for x in 0..next_point.source_size {
+                            for z in 0..next_point.source_size {
+                                let origin_coord = (next_point.coords.0 + x, origin_y, next_point.coords.2 + z);
+                                let next_coord = (next_point.coords.0 + x, next_point.coords.1, next_point.coords.2 + z);
+
+                                let count_modified = if let Some( count ) = points_memory.get_mut( &next_coord ) {
+                                    println!(
+                                        "   * Y count for {:?} = {:?}, np.dir={:?}, leaf.offset={:?}",
+                                        next_coord, *count, Direction::get_dir_name( next_point.check_dir ), node_offset
+                                    );
+                                    if is_memory_cleaning && *count == 1 {
+                                        points_memory.remove( &next_coord );
+                                    } else {
+                                        *count -= 1;
+                                    }
+
+                                    true
+                                // } else if result.contains_key( &next_coord ) {
+                                //     if next_coord.0 == debug_coord.0 && next_coord.1 == debug_coord.1 && next_coord.2 == debug_coord.2 {
+                                //         println!(
+                                //             "   * Y found in results for debug {:?}, np.dir={:?}, leaf.offset={:?}",
+                                //             next_coord, Direction::get_dir_name( next_point.check_dir ), node_offset
+                                //         );
+                                //     }
+                                //     true
+                                } else {
+                                    false
+                                };
+
+                                if count_modified {
+                                    println!(
+                                        "   * origin_coord={:?} = {}",
+                                        origin_coord, points_memory.get_mut( &origin_coord ).unwrap(),
+                                    );
+
+                                    let count = points_memory.get_mut( &origin_coord ).unwrap();
+
+                                    if is_memory_cleaning && *count == 1 {
+                                        points_memory.remove( &next_coord );
+                                    } else {
+                                        *count -= 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    5 | 6 => {
+                        let origin_z = if next_point.check_dir == 5 { next_point.coords.2 - 1 } else { node_offset.2 };
+
+                        for x in 0..next_point.source_size {
+                            for y in 0..next_point.source_size {
+                                let origin_coord = (next_point.coords.0 + x, next_point.coords.1 + y, origin_z);
+                                let next_coord = (next_point.coords.0 + x, next_point.coords.1 + y, next_point.coords.2);
+
+                                let count_modified = if let Some( count ) = points_memory.get_mut( &next_coord ) {
+                                    println!(
+                                        "   * Z count for {:?} = {:?}, np.dir={:?}, origin_coord={:?}, leaf.offset={:?}",
+                                        next_coord, *count, Direction::get_dir_name( next_point.check_dir ), origin_coord, node_offset,
+                                    );
+                                    if is_memory_cleaning && *count == 1 {
+                                        points_memory.remove( &next_coord );
+                                    } else {
+                                        *count -= 1;
+                                    }
+
+                                    true
+                                // } else if result.contains_key( &next_coord ) {
+                                //     if next_coord.0 == debug_coord.0 && next_coord.1 == debug_coord.1 && next_coord.2 == debug_coord.2 {
+                                //         println!(
+                                //             "   * Z found in results for debug {:?}, np.dir={:?}, leaf.offset={:?}",
+                                //             next_coord, Direction::get_dir_name( next_point.check_dir ), node_offset
+                                //         );
+                                //     }
+
+                                //     true
+                                } else {
+                                    if next_coord.0 == debug_coord.0 && next_coord.1 == debug_coord.1 && next_coord.2 == debug_coord.2 {
+                                        println!(
+                                            " - not found sibling for debug {:?}, np.dir={:?}, leaf.offset={:?}",
+                                            next_coord, Direction::get_dir_name( next_point.check_dir ), node_offset
+                                        );
+                                    }
+
+                                    false
+                                };
+
+                                if count_modified {
+                                    println!(
+                                        "   * origin_coord={:?} = {}",
+                                        origin_coord, points_memory.get_mut( &origin_coord ).unwrap(),
+                                    );
+
+                                    let count = points_memory.get_mut( &origin_coord ).unwrap();
+
+                                    if is_memory_cleaning && *count == 1 {
+                                        points_memory.remove( &next_coord );
+                                    } else {
+                                        *count -= 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    _ => {}
+                }
+
+                if !points_memory.contains_key( &next_point.coords ) {
+                    if next_point.coords.0 == debug_coord.0 && next_point.coords.1 == debug_coord.1 && next_point.coords.2 == debug_coord.2 {
+                        println!( "creating point of {:?}, dir={}", next_point.coords, Direction::get_dir_name( next_point.check_dir ) );
+                    }
                     points.push_back( next_point );
+                } else {
+                    if next_point.coords.0 == debug_coord.0 && next_point.coords.1 == debug_coord.1 && next_point.coords.2 == debug_coord.2 {
+                        println!( "skipping creation of point of {:?}, dir={}", next_point.coords, Direction::get_dir_name( next_point.check_dir ) )
+                    }
                 }
             }
         }
 
+        let debug_coord = (14, 9, 12);
+        println!( "Mapping values, sample value count {:?} = {}", debug_coord, points_memory.get( &debug_coord ).unwrap() );
+        println!( "Count of non-zeros = {}", points_memory.values().filter( |c| **c != 0 ).count() );
         result.drain().map( |pair| (pair.0.0, pair.0.1, pair.0.2, pair.1) ).collect()
     }
 }
