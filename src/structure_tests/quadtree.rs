@@ -106,10 +106,6 @@ impl Quadtree {
         }
     }
 
-    pub fn proces_entire_tree( &self, processor:&mut impl FnMut((TreeSize, TreeSize, TreeSize), TreeSize, NoiseValue) -> TreeSize ) {
-        self.root.proces_entire_tree( (0, 0, 0), self.max_depth, processor )
-    }
-
     pub fn from_terrain_generation( max_depth:u8, generate_value:&impl Fn(TreeSize, TreeSize) -> NoiseValue ) -> Self {
         let mut root_depth = 0;
         let mut root_node = QuadtreeNode::Leaf( generate_value( 0, 0 ) );
@@ -140,6 +136,20 @@ impl Quadtree {
         debug_assert!( y < 2u32.pow( self.max_depth as u32 ) as TreeSize, "Passed 'y' value ({}) is greater than quadtree size ({})", y, 2u32.pow( self.max_depth as u32 ) as TreeSize - 1 );
 
         self.root.get( self.max_depth, x, y )
+    }
+
+    pub fn proces_entire_tree( &self, processor:&mut impl FnMut((TreeSize, TreeSize, TreeSize), TreeSize, NoiseValue) -> TreeSize ) {
+        self.root.proces_entire_tree( (0, 0, 0), self.max_depth, processor )
+    }
+
+    pub fn process_entire_surface( &self, processor:&mut impl FnMut((TreeSize, TreeSize), NoiseValue) ) {
+        let size = 1 << self.max_depth;
+
+        for x in 0..size {
+            for y in 0..size {
+                processor( (x, y), self.get( x, y ) )
+            }
+        }
     }
 
     pub fn get_max_depth_for( n:u32 ) -> u8 {

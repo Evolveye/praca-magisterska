@@ -1,4 +1,4 @@
-use std::{cmp, collections::{HashMap, VecDeque}, rc::Rc};
+use std::{cmp, collections::HashMap, rc::Rc};
 
 use rand::seq::IteratorRandom;
 
@@ -8,15 +8,13 @@ use crate::{
     }
 };
 
-use super::quadtree::{Quadtree, QuadtreeBranch, QuadtreeNode};
+use super::quadtree::Quadtree;
 
 // pub const RENDER_DISTANCE:u32 = 32 * 16 * 2 + 1;
 // pub const RENDER_DISTANCE:u32 = 255;
-// pub const WORLD_X:u32 = 255;
-pub const WORLD_X:u32 = 15;
-// pub const WORLD_Y:u32 = 10;
-// pub const WORLD_Y:u32 = 7;
-pub const WORLD_Y:u32 = 15;
+pub const WORLD_X:u32 = 32 * 16;
+// pub const WORLD_X:u32 = 32 * 16 * 1 + 1;
+pub const WORLD_Y:u32 = 63;
 // pub const WORLD_Y:u32 = 384;
 const WORLD_HALF_Y:u32 = WORLD_Y / 2;
 pub const WORLD_Z:u32 = WORLD_X;
@@ -175,32 +173,102 @@ impl Tester {
     pub fn fill_50pc_realistically( world_holder:&mut dyn WorldHolder ) -> TestDataset {
         let noise = SimplexNoise::new( 50 );
         let max_depth = Quadtree::get_max_depth_for( WORLD_X );
-        let noise_frequency = 0.05;
+        let noise_frequency = 0.025;
         let generate_value = |x, z| noise.noise3d( x as f64 * noise_frequency, 1.0, z as f64  * noise_frequency );
 
         println!( "Filling quadtree with max depth = {}...", max_depth );
         let quadtree = Quadtree::from_terrain_generation( max_depth, &generate_value );
 
         println!( "Filling world holder with height map..." );
+
+        let stone_key = String::from( "stone" );
+        let dirt_key = String::from( "dirt" );
+        let grass_key = String::from( "grass" );
+
+        let materials = HashMap::from([
+            (&stone_key, Rc::new( Material { _density:100 } )),
+            (&dirt_key, Rc::new( Material { _density:2 } )),
+            (&grass_key, Rc::new( Material { _density:4 } )),
+        ]);
+        let colors = HashMap::from([
+            (&stone_key, Rc::new( Color { red:50, green:50, blue:50 } )),
+            (&dirt_key, Rc::new( Color { red:100, green:60, blue:40 } )),
+            (&grass_key, Rc::new( Color { red:10, green:64, blue:10 } )),
+        ]);
+
+        let common_voxel_dataset = HashMap::from([
+            (&stone_key, Rc::new( CommonVoxelData {
+                _material: materials.get( &stone_key ).unwrap().clone(),
+                _color: colors.get( &stone_key ).unwrap().clone(),
+            } ) ),
+            (&dirt_key, Rc::new( CommonVoxelData {
+                _material: materials.get( &dirt_key ).unwrap().clone(),
+                _color: colors.get( &dirt_key ).unwrap().clone(),
+            } ) ),
+            (&grass_key, Rc::new( CommonVoxelData {
+                _material: materials.get( &grass_key ).unwrap().clone(),
+                _color: colors.get( &grass_key ).unwrap().clone(),
+            } ) ),
+        ]);
+
+        let voxels = HashMap::from([
+            (&stone_key, Rc::new( Voxel {
+                _common_data: common_voxel_dataset.get( &stone_key ).unwrap().clone(),
+                _individual_data: vec![],
+            }) ),
+            (&dirt_key, Rc::new( Voxel {
+                _common_data: common_voxel_dataset.get( &dirt_key ).unwrap().clone(),
+                _individual_data: vec![],
+            }) ),
+            (&grass_key, Rc::new( Voxel {
+                _common_data: common_voxel_dataset.get( &grass_key ).unwrap().clone(),
+                _individual_data: vec![],
+            }) ),
+        ]);
+
+        let stone_voxel = voxels.get( &stone_key ).unwrap();
+        let dirt_voxel = voxels.get( &dirt_key ).unwrap();
+        let grass_voxel = voxels.get( &grass_key ).unwrap();
+
         quadtree.proces_entire_tree( &mut |offset, size, noise_value| {
             let multiplied_noise = noise_value * 10.0;
             let current_min = (WORLD_HALF_Y as i32 + multiplied_noise as i32) as u32;
             if current_min < offset.1 { return offset.1 }
 
-            // println!( "multiplied_noise={}, green={}", multiplied_noise, 64 + (multiplied_noise * 15.0) as i8 );
             let size = size - 1;
-            let green = (127 + (multiplied_noise * 15.0) as i16) as u8;
-            let grass_color = Color { red:if current_min % 2 == 0 { 10 } else { 128 }, green, blue:10 };
             let to = (offset.0 + size, current_min, offset.2 + size);
 
-            Self::fill_with( offset, to, world_holder, (format!( "grass_{}", current_min ), grass_color) );
+            // {
+            //     world_holder.fill_voxels( offset, to, Some( stone_voxel.clone() ) );
+            // }
+
+            {
+                let below_water = current_min < WORLD_HALF_Y - 5;
+                let too_high = current_min > WORLD_HALF_Y + 7;
+                let grass_color = Color {
+                    red: if current_min % 2 == 0 { 10 }
+                        else if below_water { 20 }
+                        else if too_high { 250 } else { 128 },
+                    green: (127 + (multiplied_noise * 10.0) as i16) as u8,
+                    blue: if below_water { 150 }
+                        else if too_high { 250 }
+                        else { 10 },
+                };
+                Self::fill_with( offset, to, world_holder, (format!( "grass_{}", current_min ), grass_color) );
+            }
 
             current_min + 1
+
         } );
 
-        let dataset = TestDataset::new();
-        dataset
-        // Tester::fill_50pc_realistically_ending( world_holder, dataset )
+        // quadtree.process_entire_surface( &mut |(x, z), noise_value| {
+        //     let multiplied_noise = noise_value * 10.0;
+        //     let y = (WORLD_HALF_Y as i32 + multiplied_noise as i32) as u32;
+
+        //     world_holder.fill_voxels( (x, y, z), (x, y, z), Some( grass_voxel.clone() ) );
+        // } );
+
+        Tester::fill_50pc_realistically_ending( world_holder, TestDataset::new() )
     }
 
     #[allow(dead_code)]
@@ -438,10 +506,11 @@ impl Tester {
                 }
             }
 
-            world_holder.set_voxel( 0, 0, 0, Some( dataset.voxels.get( &format!( "{}_{}", &axies_key, "x" ) ).unwrap().clone() ) );
-            world_holder.set_voxel( WORLD_X, WORLD_Y, WORLD_Z, Some( dataset.voxels.get( &format!( "{}_{}", &axies_key, "y" ) ).unwrap().clone() ) );
+            // world_holder.set_voxel( WORLD_X, WORLD_Y, WORLD_Z, Some( dataset.voxels.get( &format!( "{}_{}", &axies_key, "y" ) ).unwrap().clone() ) );
         }
 
+        // let debug_voxel = ( (WORLD_X / 2) + 18, 28, (WORLD_X / 2) + 20 );
+        // world_holder.set_voxel( debug_voxel.0, debug_voxel.1, debug_voxel.2, Some( dataset.voxels.get( &format!( "{}_{}", &axies_key, "x" ) ).unwrap().clone() ) );
 
         dataset
     }

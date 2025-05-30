@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use cgmath::Vector3;
 use vulkanalia::prelude::v1_0::*;
 use vulkanalia::vk;
@@ -31,8 +33,10 @@ impl WorldRenderer {
     pub fn update_instances_buffer( &mut self, renderer:&Renderer, world_holder:&impl WorldHolder ) {
         println!( "Getting voxels..." );
 
+        let now = Instant::now();
+        let initial_point = (1, WORLD_Y, 1);
         // let mut instances = world_holder.get_all_voxels().iter().map( |(x, y, z, v)| {
-        let mut instances = world_holder.get_all_visible_voxels_from( (0, WORLD_Y, 0) ).iter().map( |(x, y, z, v)| {
+        let mut instances = world_holder.get_all_visible_voxels_from( initial_point ).iter().map( |(x, y, z, v)| {
             VoxelInstance {
                 translate: Vector3::new(
                     *x as f32,
@@ -44,19 +48,21 @@ impl WorldRenderer {
             }
         } ).collect::<Vec<VoxelInstance>>();
 
-        println!( "instances_to_render={}", instances.len() );
+        println!( "collecting time = {:?}; instances_to_render = {}", Instant::elapsed( &now ), instances.len() );
 
         instances.push( VoxelInstance {
             translate: Vector3::new( -1.0, 20.0, -1.0 ),
             color: Color { red:255, green:255, blue:50 },
         } );
 
+        let debug_voxel = ( (WORLD_X / 2) as f32 + 18.0, 28.0, (WORLD_X / 2) as f32 + 20.0 );
         // instances.push( VoxelInstance {
-        //     translate: Vector3::new( 0.0, 4.0, 5.0 ),
-        //     color: Color { red:255, green:0, blue:50 },
+        //     translate: Vector3::new( debug_voxel.0, debug_voxel.1, debug_voxel.2 ),
+        //     color: Color { red:255, green:0, blue:255 },
         // } );
 
-        println!( "{:?}", world_holder.get_voxel( 1, 3, 2 ) );
+        println!( "initial_point = {:?}", world_holder.get_voxel( initial_point.0, initial_point.1, initial_point.2 ) );
+        println!( "debug_voxel = {:?}", debug_voxel );
 
         unsafe{ self.model.update_instances_buffer( renderer, instances ).unwrap() };
     }

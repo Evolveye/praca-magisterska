@@ -361,7 +361,7 @@ impl Renderer {
       Deg( 45.0 ),
       self.data.swapchain_extent.width as f32 / self.data.swapchain_extent.height as f32,
       0.1,
-      400.0,
+      1000.0,
     );
 
     let ubo = UniformBufferObject { view:view_matrix, proj };

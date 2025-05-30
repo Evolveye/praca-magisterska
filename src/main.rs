@@ -8,7 +8,7 @@ mod window_manager;
 use image::{GrayImage, Luma};
 use simulation::Simulation;
 use world::world_holder::WorldHolder;
-use std::path::Path;
+use std::{path::Path, time::Instant};
 use noise::generate_simplex_noise_image;
 use structure_tests::{generate_world, tester::{WORLD_X, WORLD_Y, WORLD_Z}};
 
@@ -35,6 +35,7 @@ fn generate_img() {
 }
 
 fn render_world() {
+    let now = Instant::now();
     let world = generate_world();
     // println!( "(0, 15, 0) = {:?}", world.get_voxel( 0, 15, 0 ) );
     // world.get_all_visible_voxels_from( (0, WORLD_Y, 0) );
@@ -45,5 +46,8 @@ fn render_world() {
         (WORLD_X as f32 / 2.0, 0.0, WORLD_Z as f32)
     );
     simulation.update_instances_with_world_holder( world );
+
+    println!( "Setup time = {:?}", Instant::elapsed( &now ) );
+
     simulation.run_window_event_loop();
 }

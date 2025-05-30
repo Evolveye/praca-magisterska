@@ -21,7 +21,7 @@ use voxel_list::VoxelList;
 #[allow(unused_imports)]
 use voxel_map::VoxelMap;
 
-use crate::world::world_holder::WorldHolder;
+use crate::world::world_holder::{Voxel, WorldHolder};
 
 pub fn generate_world() -> impl WorldHolder {
     println!( "" );
@@ -30,6 +30,7 @@ pub fn generate_world() -> impl WorldHolder {
     // let mut world_struct = VoxelMap::new();
     // let mut world_struct = VoxelList::new();
     let mut world_struct = Octree::from_max_size( WORLD_X );
+    println!( "Created world struct with depth = {}", Octree::<Voxel>::get_max_depth_for( WORLD_X ) );
     // let mut world_struct = Octree::new( 11 );
     // let mut world_struct = Octree::new( 18 );
     // let mut world_struct = VoxelHashMap::new();
