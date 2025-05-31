@@ -152,6 +152,11 @@ pub unsafe fn create_pipeline_for_instances<T:RendererModelDescriptions>( device
       create_shader_stage( device, include_bytes!( "./shaders/voxels/frag.spv" ), vk::ShaderStageFlags::FRAGMENT )?
     ),
 
+    AppMode::VoxelSides => (
+      create_shader_stage( device, include_bytes!( "./shaders/voxel_sides/vert.spv" ), vk::ShaderStageFlags::VERTEX )?,
+      create_shader_stage( device, include_bytes!( "./shaders/voxel_sides/frag.spv" ), vk::ShaderStageFlags::FRAGMENT )?
+    ),
+
     AppMode::InstancesTexturedLighted => (
       create_shader_stage( device, include_bytes!( "./shaders/instances-textured-lighted/vert.spv" ), vk::ShaderStageFlags::VERTEX )?,
       create_shader_stage( device, include_bytes!( "./shaders/instances-textured-lighted/frag.spv" ), vk::ShaderStageFlags::FRAGMENT )?

@@ -68,7 +68,7 @@ impl Renderer {
     let mut data = AppData::default();
     let instance = create_instance( window, &entry, &mut data )?;
 
-    data.mode = AppMode::Voxels;
+    data.mode = AppMode::VoxelSides;
     data.instances_count = 1;
     // data.instances_count = 20;
     data.surface = vk_window::create_surface( &instance, &window, &window )?;
@@ -84,6 +84,7 @@ impl Renderer {
     match data.mode {
       AppMode::Model => create_pipeline_for_model::<VertexModel>( &device, &mut data )?,
       AppMode::Voxels => create_pipeline_for_instances::<Voxel>( &device, &mut data )?,
+      AppMode::VoxelSides => create_pipeline_for_instances::<Voxel>( &device, &mut data )?,
       _ => create_pipeline_for_instances::<VertexModel>( &device, &mut data )?,
     }
 
@@ -224,6 +225,7 @@ impl Renderer {
     match self.data.mode {
       AppMode::Model => create_pipeline_for_model::<VertexModel>( &self.device, &mut self.data )?,
       AppMode::Voxels => create_pipeline_for_instances::<Voxel>( &self.device, &mut self.data )?,
+      AppMode::VoxelSides => create_pipeline_for_instances::<Voxel>( &self.device, &mut self.data )?,
       _ => create_pipeline_for_instances::<VertexModel>( &self.device, &mut self.data )?,
     }
 
@@ -237,6 +239,7 @@ impl Renderer {
 
     match self.data.mode {
       AppMode::Voxels => {},
+      AppMode::VoxelSides => {},
       _ => self.data.texture.recreate_descriptor_set( &self.device, self.data.texture_descriptor_set_layout, self.data.descriptor_pool )?,
     }
 
@@ -492,6 +495,7 @@ impl Renderer {
       0,
       &match self.data.mode {
         AppMode::Voxels => vec![ self.data.descriptor_sets[ image_index ] ],
+        AppMode::VoxelSides => vec![ self.data.descriptor_sets[ image_index ] ],
         _ => vec![ self.data.descriptor_sets[ image_index ], self.data.texture.descriptor_set ],
       },
       &[]
@@ -544,6 +548,7 @@ pub enum AppMode {
   InstancesUntexturedUnlighted,
   Model,
   Voxels,
+  VoxelSides,
 }
 
 impl Default for AppMode {

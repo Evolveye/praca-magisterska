@@ -1,6 +1,6 @@
 use std::{mem::size_of, rc::Rc};
 
-use crate::world::world_holder::{Voxel, WorldHolder};
+use crate::world::world_holder::{Voxel, VoxelSide, WorldHolder};
 
 use super::tester::*;
 
@@ -28,7 +28,7 @@ impl WorldHolder for VoxelMap {
         todo!()
     }
 
-    fn get_all_visible_voxels_from( &self, _from:(u32, u32, u32) ) -> Vec<(u32, u32, u32, Rc<Voxel>)> {
+    fn get_all_visible_voxels_from( &self, _from:(u32, u32, u32) ) -> Vec<VoxelSide> {
         todo!()
     }
 

@@ -1,5 +1,5 @@
-use std::{collections::{HashMap, HashSet, VecDeque}, ops::Deref, panic, rc::Rc};
-use crate::world::world_holder::{Voxel, WorldHolder};
+use std::{ collections::{ HashMap, HashSet, VecDeque }, rc::Rc };
+use crate::world::world_holder::{ Voxel, VoxelSide, WorldHolder };
 
 struct Direction;
 
@@ -57,6 +57,18 @@ impl Direction {
             4 => (offset.0,         offset.1, offset.2),
             5 => (offset.0,         offset.1, offset.2),
             6 => (offset.0,         offset.1, offset.2),
+            _ => unreachable!( "Unknown direction value" )
+        }
+    }
+
+    fn get_opposite( direction:u8 ) -> u8 {
+        match direction {
+            1 => 2,
+            2 => 1,
+            3 => 4,
+            4 => 3,
+            5 => 6,
+            6 => 5,
             _ => unreachable!( "Unknown direction value" )
         }
     }
@@ -363,7 +375,7 @@ impl<T> Octree<T> {
 }
 
 impl Octree<Voxel> {
-    pub fn get_visible_with_flood( &self, initial_point:(u32,u32,u32) ) -> Vec<(u32, u32, u32, Rc<Voxel>)> {
+    pub fn get_visible_with_flood( &self, initial_point:(u32,u32,u32) ) -> Vec<VoxelSide> {
         struct Point {
             coords: (u32,u32,u32),
             depth: u8,
@@ -446,7 +458,9 @@ impl Octree<Voxel> {
 
                         for y in 0..point.source_size {
                             for z in 0..point.source_size {
-                                result.entry( (x, point.coords.1 + y, point.coords.2 + z) ).or_insert_with( || data.clone() );
+                                let coords = (x, point.coords.1 + y, point.coords.2 + z);
+                                result.entry( (coords, point.check_dir) ).or_insert_with( || VoxelSide::from_voxel_rc( coords.0, coords.1, coords.2, Direction::get_opposite( point.check_dir ), &data ) );
+                                // result.entry( (coords, point.check_dir) ).or_insert_with( || VoxelSide::from_voxel_rc( coords.0, coords.1, coords.2, point.check_dir, &data ) );
                             }
                         }
                     }
@@ -456,7 +470,9 @@ impl Octree<Voxel> {
 
                         for x in 0..point.source_size {
                             for z in 0..point.source_size {
-                                result.entry( (point.coords.0 + x, y, point.coords.2 + z) ).or_insert_with( || data.clone() );
+                                let coords = (point.coords.0 + x, y, point.coords.2 + z);
+                                result.entry( (coords, point.check_dir) ).or_insert_with( || VoxelSide::from_voxel_rc( coords.0, coords.1, coords.2, Direction::get_opposite( point.check_dir ), &data ) );
+                                // result.entry( (coords, point.check_dir) ).or_insert_with( || VoxelSide::from_voxel_rc( coords.0, coords.1, coords.2, point.check_dir, &data ) );
                             }
                         }
                     }
@@ -466,7 +482,9 @@ impl Octree<Voxel> {
 
                         for x in 0..point.source_size {
                             for y in 0..point.source_size {
-                                result.entry( (point.coords.0 + x, point.coords.1 + y, z) ).or_insert_with( || data.clone() );
+                                let coords = (point.coords.0 + x, point.coords.1 + y, z);
+                                result.entry( (coords, point.check_dir) ).or_insert_with( || VoxelSide::from_voxel_rc( coords.0, coords.1, coords.2, Direction::get_opposite( point.check_dir ), &data ) );
+                                // result.entry( (coords, point.check_dir) ).or_insert_with( || VoxelSide::from_voxel_rc( coords.0, coords.1, coords.2, point.check_dir, &data ) );
                             }
                         }
                     }
@@ -478,7 +496,7 @@ impl Octree<Voxel> {
             }
 
 
-            if points_memory.contains( &point.coords ) || result.contains_key( &point.coords ) {
+            if points_memory.contains( &point.coords ) || result.contains_key( &(point.coords, point.check_dir) ) {
                 continue;
             }
 
@@ -626,7 +644,7 @@ impl Octree<Voxel> {
             // }
         }
 
-        result.drain().map( |pair| (pair.0.0, pair.0.1, pair.0.2, pair.1) ).collect()
+        result.drain().map( |pair| pair.1 ).collect()
     }
 }
 
@@ -639,7 +657,7 @@ impl WorldHolder for Octree<Voxel> {
         self.get_voxels()
     }
 
-    fn get_all_visible_voxels_from( &self, from:(u32, u32, u32) ) -> Vec<(u32, u32, u32, Rc<Voxel>)> {
+    fn get_all_visible_voxels_from( &self, from:(u32, u32, u32) ) -> Vec<VoxelSide> {
         self.get_visible_with_flood( from )
     }
 

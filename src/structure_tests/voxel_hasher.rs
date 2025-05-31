@@ -3,7 +3,7 @@ use std::hash::{ Hash, Hasher };
 use std::mem::{ size_of, size_of_val };
 use std::rc::Rc;
 
-use crate::world::world_holder::{Voxel, WorldHolder};
+use crate::world::world_holder::{Voxel, VoxelSide, WorldHolder};
 
 
 #[derive( Debug, PartialEq, Eq )]
@@ -57,7 +57,7 @@ impl WorldHolder for VoxelHashMap<Voxel> {
         todo!()
     }
 
-    fn get_all_visible_voxels_from( &self, _from:(u32, u32, u32) ) -> Vec<(u32, u32, u32, Rc<Voxel>)> {
+    fn get_all_visible_voxels_from( &self, _from:(u32, u32, u32) ) -> Vec<VoxelSide> {
         todo!()
     }
 

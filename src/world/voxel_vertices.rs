@@ -49,6 +49,18 @@ pub const VOXEL_INDICES:&[ u32; 36 ] = &[
     20,21,22,22,23,20,       // bottom
 ];
 
+pub const VOXEL_SIDE_VERTICES:[ VoxelVertex; 4 ] = [
+    // Top (+Y)
+    VoxelVertex { pos:vec3(-0.5,  0.5,  0.5), normal:vec3(0.0, 1.0, 0.0), },
+    VoxelVertex { pos:vec3( 0.5,  0.5,  0.5), normal:vec3(0.0, 1.0, 0.0), },
+    VoxelVertex { pos:vec3( 0.5,  0.5, -0.5), normal:vec3(0.0, 1.0, 0.0), },
+    VoxelVertex { pos:vec3(-0.5,  0.5, -0.5), normal:vec3(0.0, 1.0, 0.0), },
+];
+
+pub const VOXEL_SIDE_INDICES:&[ u32; 6 ] = &[
+    0, 1, 2, 2, 3, 0,        // Top
+];
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct VoxelVertex {

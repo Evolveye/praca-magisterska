@@ -12,10 +12,11 @@ use super::quadtree::Quadtree;
 
 // pub const RENDER_DISTANCE:u32 = 32 * 16 * 2 + 1;
 // pub const RENDER_DISTANCE:u32 = 255;
-pub const WORLD_X:u32 = 32 * 16;
-// pub const WORLD_X:u32 = 32 * 16 * 1 + 1;
-pub const WORLD_Y:u32 = 63;
-// pub const WORLD_Y:u32 = 384;
+// pub const WORLD_X:u32 = 16;
+pub const WORLD_X:u32 = 32 * 16 * 1 + 1;
+// pub const WORLD_Y:u32 = 63;
+// pub const WORLD_Y:u32 = 15;
+pub const WORLD_Y:u32 = 384;
 const WORLD_HALF_Y:u32 = WORLD_Y / 2;
 pub const WORLD_Z:u32 = WORLD_X;
 
@@ -190,6 +191,7 @@ impl Tester {
             (&dirt_key, Rc::new( Material { _density:2 } )),
             (&grass_key, Rc::new( Material { _density:4 } )),
         ]);
+
         let colors = HashMap::from([
             (&stone_key, Rc::new( Color { red:50, green:50, blue:50 } )),
             (&dirt_key, Rc::new( Color { red:100, green:60, blue:40 } )),
@@ -268,7 +270,8 @@ impl Tester {
         //     world_holder.fill_voxels( (x, y, z), (x, y, z), Some( grass_voxel.clone() ) );
         // } );
 
-        Tester::fill_50pc_realistically_ending( world_holder, TestDataset::new() )
+        TestDataset::new()
+        // Tester::fill_50pc_realistically_ending( world_holder, TestDataset::new() )
     }
 
     #[allow(dead_code)]
