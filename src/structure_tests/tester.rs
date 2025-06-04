@@ -14,6 +14,7 @@ use super::quadtree::Quadtree;
 // pub const RENDER_DISTANCE:u32 = 255;
 // pub const WORLD_X:u32 = 16;
 pub const WORLD_X:u32 = 32 * 16 * 1 + 1;
+// pub const WORLD_X:u32 = 32 * 4;
 // pub const WORLD_Y:u32 = 63;
 // pub const WORLD_Y:u32 = 15;
 pub const WORLD_Y:u32 = 384;

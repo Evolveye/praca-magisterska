@@ -4,12 +4,9 @@ use cgmath::Vector3;
 use vulkanalia::prelude::v1_0::*;
 use vulkanalia::vk;
 use crate::{
-    structure_tests::tester::{ WORLD_X, WORLD_Y },
     rendering::{
-        model::Model,
-        renderer::Renderer,
-        vertex::{ Renderable, RendererModelDescriptions, Vec3 }
-    },
+        model::Model, model_strip::ModelStrip, renderer::Renderer, vertex::{ Renderable, RendererModelDescriptions, Vec3 }
+    }, structure_tests::tester::{ WORLD_X, WORLD_Y }
 };
 use super::{
     voxel_vertices::{ VoxelVertex, VOXEL_SIDE_INDICES, VOXEL_SIDE_VERTICES },
@@ -18,14 +15,16 @@ use super::{
 
 
 pub struct WorldRenderer {
-    pub model: Model<VoxelVertex>
+    // pub model: Model<VoxelVertex>
+    pub model: ModelStrip<VoxelVertex>
 }
 
 impl WorldRenderer {
     pub fn new( renderer:&Renderer ) -> Self {
         Self {
             model: unsafe {
-                Model::<VoxelVertex>::new( renderer, VOXEL_SIDE_VERTICES.to_vec(), VOXEL_SIDE_INDICES.to_vec() ).unwrap()
+                // Model::<VoxelVertex>::new( renderer, VOXEL_SIDE_VERTICES.to_vec(), VOXEL_SIDE_INDICES.to_vec() ).unwrap()
+                ModelStrip::<VoxelVertex>::new( renderer, VOXEL_SIDE_VERTICES.to_vec() ).unwrap()
             },
         }
     }

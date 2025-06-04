@@ -31,6 +31,7 @@ use crate::window_manager::WindowManager;
 use crate::world::world_holder::Voxel;
 
 use super::model::Model;
+use super::model_strip::ModelStrip;
 use super::buffer::*;
 use super::pipeline::{ create_pipeline_for_instances, create_pipeline_for_model };
 use super::texture::Texture;
@@ -40,6 +41,7 @@ type Vec3 = cgmath::Vector3<f32>;
 type Mat4 = cgmath::Matrix4<f32>;
 
 type VertexModel = Model::<Vertex>;
+type VertexModelStrip = ModelStrip::<Vertex>;
 pub type ModelRegistrar = fn(usize) -> Result<Vec<vk::CommandBuffer>>;
 
 const PORTABILITY_MACOS_VERSION:Version = Version::new( 1, 3, 216 );
@@ -68,7 +70,7 @@ impl Renderer {
     let mut data = AppData::default();
     let instance = create_instance( window, &entry, &mut data )?;
 
-    data.mode = AppMode::VoxelSides;
+    data.mode = AppMode::VoxelSidesStrip;
     data.instances_count = 1;
     // data.instances_count = 20;
     data.surface = vk_window::create_surface( &instance, &window, &window )?;
@@ -82,10 +84,10 @@ impl Renderer {
     create_descriptor_set_layout( &device, &mut data )?;
 
     match data.mode {
-      AppMode::Model => create_pipeline_for_model::<VertexModel>( &device, &mut data )?,
-      AppMode::Voxels => create_pipeline_for_instances::<Voxel>( &device, &mut data )?,
-      AppMode::VoxelSides => create_pipeline_for_instances::<Voxel>( &device, &mut data )?,
-      _ => create_pipeline_for_instances::<VertexModel>( &device, &mut data )?,
+      AppMode::Model => create_pipeline_for_model::<VertexModel>( &device, &mut data, vk::PrimitiveTopology::TRIANGLE_LIST, vk::PolygonMode::FILL )?,
+      AppMode::Voxels | AppMode::VoxelSides => create_pipeline_for_instances::<Voxel>( &device, &mut data, vk::PrimitiveTopology::TRIANGLE_LIST, vk::PolygonMode::FILL )?,
+      AppMode::VoxelSidesStrip => create_pipeline_for_instances::<Voxel>( &device, &mut data, vk::PrimitiveTopology::TRIANGLE_STRIP, vk::PolygonMode::FILL )?,
+      _ => create_pipeline_for_instances::<VertexModel>( &device, &mut data, vk::PrimitiveTopology::TRIANGLE_LIST, vk::PolygonMode::FILL )?,
     }
 
     // create_pipeline_for_model( &device, &mut data )?;
@@ -223,10 +225,10 @@ impl Renderer {
     create_render_pass( &self.instance, &self.device, &mut self.data )?;
 
     match self.data.mode {
-      AppMode::Model => create_pipeline_for_model::<VertexModel>( &self.device, &mut self.data )?,
-      AppMode::Voxels => create_pipeline_for_instances::<Voxel>( &self.device, &mut self.data )?,
-      AppMode::VoxelSides => create_pipeline_for_instances::<Voxel>( &self.device, &mut self.data )?,
-      _ => create_pipeline_for_instances::<VertexModel>( &self.device, &mut self.data )?,
+      AppMode::Model => create_pipeline_for_model::<VertexModel>( &self.device, &mut self.data, vk::PrimitiveTopology::TRIANGLE_LIST, vk::PolygonMode::FILL )?,
+      AppMode::Voxels | AppMode::VoxelSides => create_pipeline_for_instances::<Voxel>( &self.device, &mut self.data, vk::PrimitiveTopology::TRIANGLE_LIST, vk::PolygonMode::FILL )?,
+      AppMode::VoxelSidesStrip => create_pipeline_for_instances::<Voxel>( &self.device, &mut self.data, vk::PrimitiveTopology::TRIANGLE_STRIP, vk::PolygonMode::FILL )?,
+      _ => create_pipeline_for_instances::<VertexModel>( &self.device, &mut self.data, vk::PrimitiveTopology::TRIANGLE_LIST, vk::PolygonMode::FILL )?,
     }
 
     create_color_objects( &self.instance, &self.device, &mut self.data )?;
@@ -494,8 +496,7 @@ impl Renderer {
       self.data.pipeline_layout,
       0,
       &match self.data.mode {
-        AppMode::Voxels => vec![ self.data.descriptor_sets[ image_index ] ],
-        AppMode::VoxelSides => vec![ self.data.descriptor_sets[ image_index ] ],
+        AppMode::Voxels | AppMode::VoxelSides | AppMode::VoxelSidesStrip => vec![ self.data.descriptor_sets[ image_index ] ],
         _ => vec![ self.data.descriptor_sets[ image_index ], self.data.texture.descriptor_set ],
       },
       &[]
@@ -549,6 +550,7 @@ pub enum AppMode {
   Model,
   Voxels,
   VoxelSides,
+  VoxelSidesStrip,
 }
 
 impl Default for AppMode {
@@ -842,6 +844,8 @@ unsafe fn create_logical_device( entry:&Entry, instance:&Instance, data:&mut App
   let features = vk::PhysicalDeviceFeatures::builder()
     .sampler_anisotropy( true )
     .sample_rate_shading( true );
+    // .fill_mode_non_solid( true )
+    // .wide_lines( true );
 
   let info = vk::DeviceCreateInfo::builder()
     .queue_create_infos( &queue_infos )

@@ -24,7 +24,7 @@ unsafe fn create_shader_stage<'a>( device:&Device, shader_bytes:&[u8], stage:vk:
   Ok( (shader_module, vert_stage) )
 }
 
-pub unsafe fn create_pipeline_for_model<T:RendererModelDescriptions>( device:&Device, data:&mut AppData ) -> Result<()> {
+pub unsafe fn create_pipeline_for_model<T:RendererModelDescriptions>( device:&Device, data:&mut AppData, primitive_topology:vk::PrimitiveTopology, polygon_mode:vk::PolygonMode ) -> Result<()> {
   let ( vert_shader_module, vert_stage ) = create_shader_stage( device, include_bytes!( "./shaders/model-untextured-lighted/vert.spv" ), vk::ShaderStageFlags::VERTEX )?;
   let ( frag_shader_module, frag_stage ) = create_shader_stage( device, include_bytes!( "./shaders/model-untextured-lighted/frag.spv" ), vk::ShaderStageFlags::FRAGMENT )?;
 
@@ -36,7 +36,7 @@ pub unsafe fn create_pipeline_for_model<T:RendererModelDescriptions>( device:&De
     .vertex_attribute_descriptions( &attribute_descriptions );
 
   let input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo::builder()
-    .topology( vk::PrimitiveTopology::TRIANGLE_LIST )
+    .topology( primitive_topology )
     .primitive_restart_enable( false );
 
   let viewport = vk::Viewport::builder()
@@ -60,7 +60,7 @@ pub unsafe fn create_pipeline_for_model<T:RendererModelDescriptions>( device:&De
   let rasterization_state = vk::PipelineRasterizationStateCreateInfo::builder()
     .depth_clamp_enable( false )
     .rasterizer_discard_enable( false )
-    .polygon_mode( vk::PolygonMode::FILL )
+    .polygon_mode( polygon_mode )
     .line_width( 1.0 )
     .cull_mode( vk::CullModeFlags::BACK )
     .front_face( vk::FrontFace::COUNTER_CLOCKWISE )
@@ -110,7 +110,7 @@ pub unsafe fn create_pipeline_for_model<T:RendererModelDescriptions>( device:&De
     .size( 4 );
 
   let set_layouts = match data.mode {
-    AppMode::Voxels => vec![ data.uniform_descriptor_set_layout ],
+    AppMode::Voxels | AppMode::VoxelSides | AppMode::VoxelSidesStrip => vec![ data.uniform_descriptor_set_layout ],
     _ => vec![ data.uniform_descriptor_set_layout, data.texture_descriptor_set_layout ],
   };
 
@@ -145,14 +145,14 @@ pub unsafe fn create_pipeline_for_model<T:RendererModelDescriptions>( device:&De
   Ok(())
 }
 
-pub unsafe fn create_pipeline_for_instances<T:RendererModelDescriptions>( device:&Device, data:&mut AppData ) -> Result<()> {
+pub unsafe fn create_pipeline_for_instances<T:RendererModelDescriptions>( device:&Device, data:&mut AppData, primitive_topology:vk::PrimitiveTopology, polygon_mode:vk::PolygonMode  ) -> Result<()> {
   let ( (vert_shader_module, vert_stage), (frag_shader_module, frag_stage) ) = match data.mode {
     AppMode::Voxels => (
       create_shader_stage( device, include_bytes!( "./shaders/voxels/vert.spv" ), vk::ShaderStageFlags::VERTEX )?,
       create_shader_stage( device, include_bytes!( "./shaders/voxels/frag.spv" ), vk::ShaderStageFlags::FRAGMENT )?
     ),
 
-    AppMode::VoxelSides => (
+    AppMode::VoxelSides | AppMode::VoxelSidesStrip => (
       create_shader_stage( device, include_bytes!( "./shaders/voxel_sides/vert.spv" ), vk::ShaderStageFlags::VERTEX )?,
       create_shader_stage( device, include_bytes!( "./shaders/voxel_sides/frag.spv" ), vk::ShaderStageFlags::FRAGMENT )?
     ),
@@ -167,7 +167,7 @@ pub unsafe fn create_pipeline_for_instances<T:RendererModelDescriptions>( device
       create_shader_stage( device, include_bytes!( "./shaders/instances-untextured-unlighted/frag.spv" ), vk::ShaderStageFlags::FRAGMENT )?
     ),
 
-    _ => todo!(),
+    _ => unreachable!(),
   };
 
   let (binding_descriptions, attribute_descriptions) = {
@@ -185,14 +185,8 @@ pub unsafe fn create_pipeline_for_instances<T:RendererModelDescriptions>( device
     .vertex_binding_descriptions( &binding_descriptions )
     .vertex_attribute_descriptions( &attribute_descriptions );
 
-  // let instance_binding_descriptions = &[ ModelInstance::binding_description() ];
-  // let instance_attribute_descriptions = ModelInstance::attribute_description();
-  // let instance_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
-  //   .vertex_binding_descriptions( instance_binding_descriptions )
-  //   .vertex_attribute_descriptions( &instance_attribute_descriptions );
-
   let input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo::builder()
-    .topology( vk::PrimitiveTopology::TRIANGLE_LIST )
+    .topology( primitive_topology )
     .primitive_restart_enable( false );
 
   let viewport = vk::Viewport::builder()
@@ -216,7 +210,7 @@ pub unsafe fn create_pipeline_for_instances<T:RendererModelDescriptions>( device
   let rasterization_state = vk::PipelineRasterizationStateCreateInfo::builder()
     .depth_clamp_enable( false )
     .rasterizer_discard_enable( false )
-    .polygon_mode( vk::PolygonMode::FILL )
+    .polygon_mode( polygon_mode )
     .line_width( 1.0 )
     .cull_mode( vk::CullModeFlags::BACK )
     .front_face( vk::FrontFace::COUNTER_CLOCKWISE )
