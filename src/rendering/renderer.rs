@@ -240,8 +240,7 @@ impl Renderer {
     create_descriptor_sets( &self.device, &mut self.data )?;
 
     match self.data.mode {
-      AppMode::Voxels => {},
-      AppMode::VoxelSides => {},
+      AppMode::Voxels | AppMode::VoxelSides | AppMode::VoxelSidesStrip => {},
       _ => self.data.texture.recreate_descriptor_set( &self.device, self.data.texture_descriptor_set_layout, self.data.descriptor_pool )?,
     }
 
