@@ -4,7 +4,7 @@ use rand::seq::IteratorRandom;
 
 use crate::{
     noise::simplex_noise::SimplexNoise, world::world_holder::{
-        Color, CommonVoxelData, Material, Voxel, WorldHolder
+        Color, CommonVoxelData, Material, Voxel, WorldHolding
     }
 };
 
@@ -81,9 +81,9 @@ impl TestDataset {
 
 pub struct Tester {}
 
+#[allow(dead_code)]
 impl Tester {
-    #[allow(dead_code)]
-    pub fn set_0( _world_holder:&dyn WorldHolder ) -> TestDataset {
+    pub fn set_0( _world_holder:&dyn WorldHolding ) -> TestDataset {
         TestDataset {
             materials: HashMap::new(),
             colors: HashMap::new(),
@@ -92,8 +92,7 @@ impl Tester {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn set_1( world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    pub fn set_1( world_holder:&mut dyn WorldHolding ) -> TestDataset {
         let key = String::from( "default" );
         let materials = HashMap::from([ (key.clone(), Rc::new( Material { _density:100 } )) ]);
 
@@ -115,43 +114,35 @@ impl Tester {
         test_dataset
     }
 
-    #[allow(dead_code)]
-    pub fn set_50pc( world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    pub fn set_50pc( world_holder:&mut dyn WorldHolding ) -> TestDataset {
         Self::set_n( WORLD_Z * WORLD_Y * WORLD_X / 2, world_holder )
     }
 
-    #[allow(dead_code)]
-    pub fn set_100pc( world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    pub fn set_100pc( world_holder:&mut dyn WorldHolding ) -> TestDataset {
         Self::set_n( WORLD_Z * WORLD_Y * WORLD_X, world_holder )
     }
 
-    #[allow(dead_code)]
-    pub fn set_50pc_random( world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    pub fn set_50pc_random( world_holder:&mut dyn WorldHolding ) -> TestDataset {
         Self::set_n_random( WORLD_Z * WORLD_Y * WORLD_X / 2, world_holder )
     }
 
-    #[allow(dead_code)]
-    pub fn set_50pc_uniques( world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    pub fn set_50pc_uniques( world_holder:&mut dyn WorldHolding ) -> TestDataset {
         Self::set_n_uniques( WORLD_Z * WORLD_Y * WORLD_X / 2, world_holder )
     }
 
-    #[allow(dead_code)]
-    pub fn set_99pc( world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    pub fn set_99pc( world_holder:&mut dyn WorldHolding ) -> TestDataset {
         Self::set_n( WORLD_Z * WORLD_Y * WORLD_X - 1, world_holder )
     }
 
-    #[allow(dead_code)]
-    pub fn set_100_uniques( world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    pub fn set_100_uniques( world_holder:&mut dyn WorldHolding ) -> TestDataset {
         Self::set_n_uniques( WORLD_Z * WORLD_Y * WORLD_X, world_holder )
     }
 
-    #[allow(dead_code)]
-    pub fn fill_50pc( world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    pub fn fill_50pc( world_holder:&mut dyn WorldHolding ) -> TestDataset {
         Self::fill( (0, 0, 0), (WORLD_Z, WORLD_Y, WORLD_X / 2), world_holder )
     }
 
-    #[allow(dead_code)]
-    pub fn fill_50pc_realistically_flat( world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    pub fn fill_50pc_realistically_flat( world_holder:&mut dyn WorldHolding ) -> TestDataset {
         let dirt_color = Color { red:100, green:60, blue:40 };
         let grass_color = Color { red:10, green:64, blue:10 };
         let mut dataset = TestDataset::new();
@@ -171,8 +162,7 @@ impl Tester {
         Tester::fill_50pc_realistically_ending( world_holder, dataset )
     }
 
-    #[allow(dead_code)]
-    pub fn fill_50pc_realistically( world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    pub fn fill_50pc_realistically( world_holder:&mut dyn WorldHolding ) -> TestDataset {
         let noise = SimplexNoise::new( 50 );
         let max_depth = Quadtree::get_max_depth_for( WORLD_X );
         let noise_frequency = 0.025;
@@ -261,7 +251,6 @@ impl Tester {
             }
 
             current_min + 1
-
         } );
 
         // quadtree.process_entire_surface( &mut |(x, z), noise_value| {
@@ -275,12 +264,11 @@ impl Tester {
         // Tester::fill_50pc_realistically_ending( world_holder, TestDataset::new() )
     }
 
-    #[allow(dead_code)]
-    pub fn fill_100pc( world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    pub fn fill_100pc( world_holder:&mut dyn WorldHolding ) -> TestDataset {
         Self::fill( (0, 0, 0), (WORLD_Z, WORLD_Y, WORLD_X), world_holder )
     }
 
-    fn set_n( n:u32, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    fn set_n( n:u32, world_holder:&mut dyn WorldHolding ) -> TestDataset {
         let key = String::from( "default" );
         let materials = HashMap::from([ (key.clone(), Rc::new( Material { _density:100 } )) ]);
         let colors = HashMap::from([ (key.clone(), Rc::new( Color { red:50, green:100, blue:200 } )) ]);
@@ -308,7 +296,7 @@ impl Tester {
         TestDataset { materials, colors, common_voxel_dataset, voxels }
     }
 
-    fn set_n_random( n:u32, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    fn set_n_random( n:u32, world_holder:&mut dyn WorldHolding ) -> TestDataset {
         let key = String::from( "default" );
         let materials = HashMap::from([ (key.clone(), Rc::new( Material { _density:100 } )) ]);
         let colors = HashMap::from([ (key.clone(), Rc::new( Color { red:50, green:100, blue:200 } )) ]);
@@ -336,7 +324,7 @@ impl Tester {
         TestDataset { materials, colors, common_voxel_dataset, voxels }
     }
 
-    fn set_n_uniques( n:u32, world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    fn set_n_uniques( n:u32, world_holder:&mut dyn WorldHolding ) -> TestDataset {
         let mut materials = HashMap::new();
         let mut colors = HashMap::new();
         let mut common_voxel_dataset = HashMap::new();
@@ -392,7 +380,7 @@ impl Tester {
         TestDataset { materials, colors, common_voxel_dataset, voxels }
     }
 
-    fn fill_with( from:(u32, u32, u32), to:(u32, u32, u32), world_holder:&mut dyn WorldHolder, setup:(String, Color) ) -> TestDataset {
+    fn fill_with( from:(u32, u32, u32), to:(u32, u32, u32), world_holder:&mut dyn WorldHolding, setup:(String, Color) ) -> TestDataset {
         let materials = HashMap::from([ (setup.0.clone(), Rc::new( Material { _density:100 } )) ]);
         let colors = HashMap::from([ (setup.0.clone(), Rc::new( setup.1 )) ]);
 
@@ -413,11 +401,11 @@ impl Tester {
         TestDataset { materials, colors:HashMap::new(), common_voxel_dataset, voxels }
     }
 
-    fn fill( from:(u32, u32, u32), to:(u32, u32, u32), world_holder:&mut dyn WorldHolder ) -> TestDataset {
+    fn fill( from:(u32, u32, u32), to:(u32, u32, u32), world_holder:&mut dyn WorldHolding ) -> TestDataset {
         Self::fill_with( from, to, world_holder, (String::from("default"), Color { red:50, green:50, blue:50 }) )
     }
 
-    fn fill_50pc_realistically_ending( world_holder:&mut dyn WorldHolder, mut dataset:TestDataset ) -> TestDataset {
+    fn fill_50pc_realistically_ending( world_holder:&mut dyn WorldHolding, mut dataset:TestDataset ) -> TestDataset {
         let noise = SimplexNoise::new( 50 );
 
         let coal_key = String::from( "coal" );

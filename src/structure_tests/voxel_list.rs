@@ -1,6 +1,6 @@
 use std::{mem::size_of, rc::Rc};
 
-use crate::world::world_holder::{Voxel, VoxelSide, WorldHolder};
+use crate::world::world_holder::{Voxel, VoxelSide, WorldHolding};
 
 pub struct VoxelInWorld {
     x: u32,
@@ -22,7 +22,7 @@ impl VoxelList {
     }
 }
 
-impl WorldHolder for VoxelList {
+impl WorldHolding for VoxelList {
     fn get_voxel( &self, x:u32, y:u32, z:u32 ) -> Option<std::rc::Rc<Voxel>> {
         match self.data.iter().find( |v| v.x == x && v.y == y && v.z == z ) {
             Some( voxel_in_world ) => Some( voxel_in_world.voxel.clone() ),

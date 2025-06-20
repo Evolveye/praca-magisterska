@@ -12,6 +12,7 @@ use super::buffer::{
 };
 
 #[derive(Clone, Debug, Default)]
+#[allow(dead_code)]
 pub struct Texture {
   image: vk::Image,
   image_memory: vk::DeviceMemory,

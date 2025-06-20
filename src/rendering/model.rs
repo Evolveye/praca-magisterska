@@ -68,6 +68,7 @@ pub struct Model<TVertex> {
   pub instance_buffer_memory: vk::DeviceMemory,
 }
 
+#[allow(dead_code)]
 impl<TVertex> Model<TVertex> {
   pub unsafe fn new( renderer:&Renderer, vertices:Vec<TVertex>, indices:Vec<u32> ) -> Result<Self> {
     let ( index_buffer, index_buffer_memory ) = Model::<TVertex>::create_index_buffer( renderer, &indices )?;

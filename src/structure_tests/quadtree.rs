@@ -6,6 +6,7 @@ pub enum QuadtreeNode {
     Branch( Box<QuadtreeBranch> ),
 }
 
+#[allow(dead_code)]
 impl QuadtreeNode {
     fn get_min( &self ) -> NoiseValue {
         match self {
@@ -22,6 +23,18 @@ impl QuadtreeNode {
                 branch.children[ child_index ].get( reversed_depth - 1, x, y )
             }
         }
+    }
+
+    fn set( &mut self, reversed_depth:u8, x:TreeSize, y:TreeSize, value:NoiseValue ) {
+        match self {
+            QuadtreeNode::Leaf( old_value ) => {
+                *old_value = value;
+            },
+            QuadtreeNode::Branch( branch ) => {
+                let child_index = QuadtreeBranch::get_child_index( reversed_depth, (x, y) );
+                branch.children[ child_index ].set( reversed_depth - 1, x, y, value );
+            }
+        };
     }
 
     fn fill( offset:(TreeSize, TreeSize), depth:u8, generate_value:&impl Fn(TreeSize, TreeSize) -> NoiseValue ) -> Self {
@@ -98,6 +111,7 @@ pub struct Quadtree {
     pub max_depth: u8,
 }
 
+#[allow(dead_code)]
 impl Quadtree {
     pub fn new( max_depth:u8, initial_value:NoiseValue ) -> Self {
         Self {
@@ -136,6 +150,10 @@ impl Quadtree {
         debug_assert!( y < 2u32.pow( self.max_depth as u32 ) as TreeSize, "Passed 'y' value ({}) is greater than quadtree size ({})", y, 2u32.pow( self.max_depth as u32 ) as TreeSize - 1 );
 
         self.root.get( self.max_depth, x, y )
+    }
+
+    pub fn set( &mut self, x:TreeSize, y:TreeSize, value:NoiseValue ) {
+        self.root.set( self.max_depth, x, y, value )
     }
 
     pub fn proces_entire_tree( &self, processor:&mut impl FnMut((TreeSize, TreeSize, TreeSize), TreeSize, NoiseValue) -> TreeSize ) {

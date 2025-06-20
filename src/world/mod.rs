@@ -1,4 +1,6 @@
+pub mod world_generator;
+pub mod world_chunk;
 pub mod voxel_vertices;
-pub mod ores;
 pub mod world_holder;
 pub mod world_renderer;
+pub mod world;

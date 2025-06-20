@@ -1,4 +1,3 @@
-use std::arch::x86_64::*;
 use std::num::Wrapping;
 
 const GRAD3: [(i8, i8, i8); 12] = [
@@ -14,6 +13,7 @@ pub struct SimplexNoise {
     perm: [u8; 512],
 }
 
+#[allow(dead_code)]
 impl SimplexNoise {
     pub fn new(seed: u32) -> Self {
         let mut perm = [0u8; 512];
@@ -38,7 +38,6 @@ impl SimplexNoise {
         Self { perm }
     }
 
-    #[allow(dead_code)]
     pub fn noise3d( &self, x:f64, y:f64, z:f64 ) -> f64 {
         let s = (x + y + z) * F3;
         let i = (x + s).floor() as isize;
@@ -105,7 +104,6 @@ impl SimplexNoise {
         32.0 * (n0 + n1 + n2 + n3)
     }
 
-    #[allow(dead_code)]
     pub fn noise3d_with_gradient( &self, x:f64, y:f64, z:f64) -> (f64, (f64, f64, f64)) {
         let s = (x + y + z) * F3;
         let i = (x + s).floor() as isize;
@@ -146,9 +144,6 @@ impl SimplexNoise {
         let gi3 = self.perm[ ii + 1  + self.perm[ jj + 1  + self.perm[ kk + 1 ] as usize] as usize] as usize % 12;
 
         let mut n0 = 0.0;
-        let mut n1 = 0.0;
-        let mut n2 = 0.0;
-        let mut n3 = 0.0;
 
         let mut dx = 0.0;
         let mut dy = 0.0;
@@ -179,7 +174,6 @@ impl SimplexNoise {
         (32.0 * n0, (dx, dy, dz))
     }
 
-    #[allow(dead_code)]
     pub fn noise3d_with_laplacian( &self, x:f64, y:f64, z:f64 ) -> (f64, f64) {
         let s = (x + y + z) * F3;
         let i = (x + s).floor() as isize;

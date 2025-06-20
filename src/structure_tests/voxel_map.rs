@@ -1,6 +1,6 @@
 use std::{mem::size_of, rc::Rc};
 
-use crate::world::world_holder::{Voxel, VoxelSide, WorldHolder};
+use crate::world::world_holder::{Voxel, VoxelSide, WorldHolding};
 
 use super::tester::*;
 
@@ -19,7 +19,7 @@ impl VoxelMap {
     }
 }
 
-impl WorldHolder for VoxelMap {
+impl WorldHolding for VoxelMap {
     fn get_voxel( &self, x:u32, y:u32, z:u32 ) -> Option<Rc<Voxel>> {
         self.data[ z as usize ][ y as usize ][ x as usize ].clone()
     }

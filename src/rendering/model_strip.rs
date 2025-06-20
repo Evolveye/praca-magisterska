@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cgmath::{ vec2, vec3, Vector3 };
+use cgmath::Vector3;
 use std::{
   mem::size_of,
   ptr::copy_nonoverlapping as memcpy,
@@ -26,6 +26,7 @@ pub struct ModelStrip<TVertex> {
   pub instance_buffer_memory: vk::DeviceMemory,
 }
 
+#[allow(dead_code)]
 impl<TVertex> ModelStrip<TVertex> {
   pub unsafe fn new( renderer:&Renderer, vertices:Vec<TVertex> ) -> Result<Self> {
     let ( vertex_buffer, vertex_buffer_memory ) = Self::create_vertex_buffer( renderer, &vertices )?;

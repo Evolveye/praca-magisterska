@@ -8,8 +8,7 @@ use winit::{
 };
 
 use crate::world::{
-  world_holder::WorldHolder,
-  world_renderer::WorldRenderer
+  world::World, world_holder::WorldHolding, world_renderer::WorldRenderer
 };
 
 use super::{
@@ -128,9 +127,9 @@ pub struct Simulation {
   start_time: Instant,
   last_tick_time: Instant,
   fps_time: Instant,
-  fps_count: u32,
 }
 
+#[allow(dead_code)]
 impl Simulation {
   pub fn new() -> Result<Self> {
     pretty_env_logger::init();
@@ -151,7 +150,6 @@ impl Simulation {
       start_time: Instant::now(),
       last_tick_time: Instant::now(),
       fps_time: Instant::now(),
-      fps_count: 0,
     } )
   }
 
@@ -159,8 +157,12 @@ impl Simulation {
     unsafe { self.world_renderer.model.update_instances_buffer_with_defaults( &self.renderer, 19 ).unwrap() };
   }
 
-  pub fn update_instances_with_world_holder( &mut self, world_holder:impl WorldHolder ) {
-    self.world_renderer.update_instances_buffer( &self.renderer, &world_holder );
+  pub fn update_instances_with_world_holder( &mut self, world_holder:impl WorldHolding ) {
+    self.world_renderer.update_instances_buffer_with_holder( &self.renderer, &world_holder );
+  }
+
+  pub fn update_instances_with_world( &mut self, world:&World ) {
+    self.world_renderer.update_instances_buffer( &self.renderer, world );
   }
 
   pub fn move_camera_to( &mut self, position:(f32, f32, f32), target:(f32, f32, f32) ) {
@@ -189,14 +191,12 @@ impl Simulation {
             let time_delta = timestamp.duration_since( self.last_tick_time );
 
             self.last_tick_time = timestamp;
-            self.fps_count += 1;
 
             if self.fps_time.elapsed() >= Duration::from_secs( 1 ) {
               let fps = 1.0 / time_delta.as_secs_f64();
-              println!( "fps={}", self.fps_count );
+              println!( "fps={}", fps as u32 );
 
               self.fps_time = timestamp;
-              self.fps_count = 0
             }
 
             self.control_manager.update( &self.settings, time_delta.as_secs_f32() );

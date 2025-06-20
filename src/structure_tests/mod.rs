@@ -1,4 +1,5 @@
 pub mod tester;
+pub mod tester_generators;
 pub mod voxel_map;
 pub mod voxel_list;
 pub mod octree;
@@ -21,9 +22,16 @@ use voxel_list::VoxelList;
 #[allow(unused_imports)]
 use voxel_map::VoxelMap;
 
-use crate::world::world_holder::{Voxel, WorldHolder};
+use crate::{structure_tests::tester_generators::GeneratorOfRealisticallyTerrain, world::{world::World, world_holder::{Voxel, WorldHolding}}};
 
-pub fn generate_world() -> impl WorldHolder {
+pub fn generate_world_as_world() -> World {
+    let world_generator = GeneratorOfRealisticallyTerrain::new( 50 );
+    let world = World::new( 2, world_generator );
+    world
+}
+
+#[allow(dead_code)]
+pub fn generate_world_as_holder() -> impl WorldHolding {
     println!( "" );
     println!( "Starting tester" );
 

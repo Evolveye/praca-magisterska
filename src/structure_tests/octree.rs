@@ -1,8 +1,9 @@
 use std::{ collections::{ HashMap, HashSet, VecDeque }, rc::Rc };
-use crate::world::world_holder::{ Voxel, VoxelSide, WorldHolder };
+use crate::world::world_holder::{ Voxel, VoxelSide, WorldHolding };
 
 struct Direction;
 
+#[allow(dead_code)]
 impl Direction {
     pub const UNSPECIFIED: u8 = 0;
     pub const LEFT:        u8 = 1;
@@ -334,8 +335,8 @@ pub struct Octree<T> {
     max_depth: u8,
 }
 
+#[allow(dead_code)]
 impl<T> Octree<T> {
-    #[allow(dead_code)]
     pub fn new( max_depth:u8 ) -> Self {
         Self {
             max_depth,
@@ -365,8 +366,12 @@ impl<T> Octree<T> {
         self.root.remove( self.max_depth, x, y, z )
     }
 
-    pub fn count_leaves(&self) -> usize {
+    pub fn count_leaves( &self ) -> usize {
         self.root.count_leaves()
+    }
+
+    pub fn get_size( &self ) -> u8 {
+        1 << self.max_depth
     }
 
     pub fn get_max_depth_for( n:u32 ) -> u8 {
@@ -648,7 +653,7 @@ impl Octree<Voxel> {
     }
 }
 
-impl WorldHolder for Octree<Voxel> {
+impl WorldHolding for Octree<Voxel> {
     fn get_voxel( &self, x:u32, y:u32, z:u32 ) -> Option<Rc<Voxel>> {
         self.get( x, y, z )
     }

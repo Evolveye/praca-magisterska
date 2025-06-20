@@ -1,7 +1,7 @@
 use cgmath::vec3;
-
 use crate::rendering::vertex::Vec3;
 
+#[allow(dead_code)]
 pub const VOXEL_VERTICES:[ VoxelVertex; 24 ] = [
     // Front (+Z)
     VoxelVertex { pos:vec3(-0.5, -0.5,  0.5), normal:vec3(0.0, 0.0, 1.0), },
@@ -40,6 +40,7 @@ pub const VOXEL_VERTICES:[ VoxelVertex; 24 ] = [
     VoxelVertex { pos:vec3(-0.5, -0.5,  0.5), normal:vec3(0.0, -1.0, 0.0) },
 ];
 
+#[allow(dead_code)]
 pub const VOXEL_INDICES:&[ u32; 36 ] = &[
     0, 1, 2, 2, 3, 0,        // front
     4, 5, 6, 6, 7, 4,        // back
@@ -49,6 +50,7 @@ pub const VOXEL_INDICES:&[ u32; 36 ] = &[
     20,21,22,22,23,20,       // bottom
 ];
 
+#[allow(dead_code)]
 pub const VOXEL_SIDE_VERTICES:[ VoxelVertex; 4 ] = [
     // Top (+Y)
     VoxelVertex { pos:vec3(-0.5,  0.5,  0.5), normal:vec3(0.0, 1.0, 0.0), },
@@ -64,6 +66,7 @@ pub const VOXEL_SIDE_VERTICES:[ VoxelVertex; 4 ] = [
     // VoxelVertex { pos:vec3(-0.5,  0.5,  0.25), normal:vec3(0.0, 1.0, 0.0), },
 ];
 
+#[allow(dead_code)]
 pub const VOXEL_SIDE_INDICES:&[ u32; 6 ] = &[
     0, 1, 2, 2, 3, 0,        // Top
 ];

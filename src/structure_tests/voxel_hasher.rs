@@ -3,7 +3,7 @@ use std::hash::{ Hash, Hasher };
 use std::mem::{ size_of, size_of_val };
 use std::rc::Rc;
 
-use crate::world::world_holder::{Voxel, VoxelSide, WorldHolder};
+use crate::world::world_holder::{Voxel, VoxelSide, WorldHolding};
 
 
 #[derive( Debug, PartialEq, Eq )]
@@ -27,14 +27,14 @@ pub struct VoxelHashMap<T> {
     voxels: HashMap<Position, Rc<T>>,
 }
 
+#[allow(dead_code)]
 impl<T> VoxelHashMap<T> {
-    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             voxels: HashMap::new(),
         }
     }
-    #[allow(dead_code)]
+
     pub fn new_with_capacity( capacity:usize ) -> Self {
         Self {
             voxels: HashMap::with_capacity( capacity ),
@@ -42,7 +42,7 @@ impl<T> VoxelHashMap<T> {
     }
 }
 
-impl WorldHolder for VoxelHashMap<Voxel> {
+impl WorldHolding for VoxelHashMap<Voxel> {
     fn get_voxel(&self, x:u32, y:u32, z:u32) -> Option<Rc<Voxel>> {
         let pos = Position { x, y, z };
 

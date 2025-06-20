@@ -1,16 +1,17 @@
 use std::time::Instant;
 
-use cgmath::Vector3;
 use vulkanalia::prelude::v1_0::*;
 use vulkanalia::vk;
 use crate::{
     rendering::{
-        model::Model, model_strip::ModelStrip, renderer::Renderer, vertex::{ Renderable, RendererModelDescriptions, Vec3 }
-    }, structure_tests::tester::{ WORLD_X, WORLD_Y }
+        model_strip::ModelStrip, renderer::Renderer,
+        vertex::{ Renderable, RendererModelDescriptions, Vec3 }
+    },
+    structure_tests::tester::WORLD_Y, world::world::World
 };
 use super::{
-    voxel_vertices::{ VoxelVertex, VOXEL_SIDE_INDICES, VOXEL_SIDE_VERTICES },
-    world_holder::{ Color, Voxel, VoxelSide, WorldHolder },
+    voxel_vertices::{ VoxelVertex, VOXEL_SIDE_VERTICES },
+    world_holder::{ Color, Voxel, VoxelSide, WorldHolding },
 };
 
 
@@ -29,12 +30,7 @@ impl WorldRenderer {
         }
     }
 
-    pub fn update_instances_buffer( &mut self, renderer:&Renderer, world_holder:&impl WorldHolder ) {
-        println!( "Size of Vec3 = {}", size_of::<Vec3>() );
-        println!( "Size of VoxelSide = {}", size_of::<VoxelSide>() );
-
-        println!( "Getting voxels..." );
-
+    pub fn update_instances_buffer_with_holder( &mut self, renderer:&Renderer, world_holder:&impl WorldHolding ) {
         let now = Instant::now();
         let initial_point = (1, WORLD_Y, 1);
         // let mut instances = world_holder.get_all_voxels().iter().map( |(x, y, z, v)| {
@@ -55,6 +51,24 @@ impl WorldRenderer {
         println!( "initial_point = {:?}", world_holder.get_voxel( initial_point.0, initial_point.1, initial_point.2 ) );
 
         unsafe{ self.model.update_instances_buffer( renderer, instances ).unwrap() };
+    }
+
+    pub fn update_instances_buffer( &mut self, renderer:&Renderer, world:&World ) {
+        let now = Instant::now();
+        let renderables = world.get_renderables();
+
+        // renderables.push( VoxelSide::new(
+        //     Vector3::new( 0.0, 15.0, 0.0 ), Color { red:255, green:50, blue:255 }, 3
+        // ) );
+        // renderables.push( VoxelSide::new(
+        //     Vector3::new( 1.0, 15.0, 0.0 ), Color { red:150, green:50, blue:150 }, 3
+        // ) );
+
+        println!( "collecting time = {:?}; instances_to_render = {}", Instant::elapsed( &now ), renderables.len() );
+        if renderables.len() >= 2 { println!( "second renderable {:?}", renderables[ 1 ] ) }
+
+        debug_assert!( renderables.len() > 0, "Renderables count cannot be 0!" );
+        unsafe{ self.model.update_instances_buffer( renderer, renderables ).unwrap() };
     }
 }
 

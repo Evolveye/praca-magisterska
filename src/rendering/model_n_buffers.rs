@@ -18,6 +18,7 @@ use super::buffer::{ create_buffer, copy_buffer };
 
 
 #[derive(Clone, Debug, Default)]
+#[allow(dead_code)]
 pub struct Model {
   pub vertices: Vec<Vertex>,
   pub indices: Vec<u32>,
