@@ -2,7 +2,7 @@ use std::{collections::HashMap, rc::Rc};
 
 use cgmath::Vector3;
 
-use crate::rendering::vertex::Vec3;
+use crate::{rendering::vertex::Vec3, world::world_chunk::ChunkBitmask};
 
 pub type Coordinate = u32;
 
@@ -104,7 +104,7 @@ impl VoxelSide {
         Self { pos, color, direction }
     }
 
-    pub fn from_voxel_rc( x:u32, y:u32, z:u32, direction:u8, voxel:&Rc<Voxel> ) -> Self {
+    pub fn from_voxel_rc( x:i64, y:i64, z:i64, direction:u8, voxel:&Rc<Voxel> ) -> Self {
         Self {
             pos: Vector3::new( x as f32, y as f32, z as f32 ),
             direction,
@@ -134,6 +134,7 @@ pub trait WorldHolding {
     fn set_voxel( &mut self, x:Coordinate, y:Coordinate, z:Coordinate, voxel:Option<Rc<Voxel>> );
     fn fill_voxels( &mut self, from:(Coordinate, Coordinate, Coordinate), to:(Coordinate, Coordinate, Coordinate), voxel:Option<Rc<Voxel>> );
 
+    fn to_bitmask( &self ) -> ChunkBitmask;
     fn get_size( &self );
     fn get_bytes_with_prefixes( &self, bytes:usize ) -> String {
         match bytes {

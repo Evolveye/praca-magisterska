@@ -26,7 +26,7 @@ use crate::{structure_tests::tester_generators::GeneratorOfRealisticallyTerrain,
 
 pub fn generate_world_as_world() -> World {
     let world_generator = GeneratorOfRealisticallyTerrain::new( 50 );
-    let world = World::new( 2, world_generator );
+    let world = World::new( 4, world_generator );
     world
 }
 

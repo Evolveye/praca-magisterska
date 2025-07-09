@@ -3,6 +3,7 @@ use std::hash::{ Hash, Hasher };
 use std::mem::{ size_of, size_of_val };
 use std::rc::Rc;
 
+use crate::world::world_chunk::ChunkBitmask;
 use crate::world::world_holder::{Voxel, VoxelSide, WorldHolding};
 
 
@@ -58,6 +59,10 @@ impl WorldHolding for VoxelHashMap<Voxel> {
     }
 
     fn get_all_visible_voxels_from( &self, _from:(u32, u32, u32) ) -> Vec<VoxelSide> {
+        todo!()
+    }
+
+    fn to_bitmask( &self ) -> ChunkBitmask {
         todo!()
     }
 

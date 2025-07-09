@@ -219,9 +219,9 @@ impl Tester {
             }) ),
         ]);
 
-        let stone_voxel = voxels.get( &stone_key ).unwrap();
-        let dirt_voxel = voxels.get( &dirt_key ).unwrap();
-        let grass_voxel = voxels.get( &grass_key ).unwrap();
+        let _stone_voxel = voxels.get( &stone_key ).unwrap();
+        let _dirt_voxel = voxels.get( &dirt_key ).unwrap();
+        let _grass_voxel = voxels.get( &grass_key ).unwrap();
 
         quadtree.proces_entire_tree( &mut |offset, size, noise_value| {
             let multiplied_noise = noise_value * 10.0;

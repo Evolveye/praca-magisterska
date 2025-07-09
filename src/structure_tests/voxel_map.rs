@@ -1,6 +1,6 @@
 use std::{mem::size_of, rc::Rc};
 
-use crate::world::world_holder::{Voxel, VoxelSide, WorldHolding};
+use crate::world::{world_chunk::ChunkBitmask, world_holder::{Voxel, VoxelSide, WorldHolding}};
 
 use super::tester::*;
 
@@ -29,6 +29,10 @@ impl WorldHolding for VoxelMap {
     }
 
     fn get_all_visible_voxels_from( &self, _from:(u32, u32, u32) ) -> Vec<VoxelSide> {
+        todo!()
+    }
+
+    fn to_bitmask( &self ) -> ChunkBitmask {
         todo!()
     }
 

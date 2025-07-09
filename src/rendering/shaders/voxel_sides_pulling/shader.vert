@@ -36,28 +36,27 @@ mat3 getRotationMatrix( uint dir ) {
              1,  0, 0,
              0,  0, 1
         );
-    } else if (dir == 4u) { // BOTTOM
+    } else if (dir == 3u) { // BOTTOM (-Y)
         return mat3(
              1,  0,  0,
              0, -1,  0,
              0,  0, -1
         );
-    } else if (dir == 5u) { // FRONT (+Z)
-        return mat3(
-             1,  0,  0,
-             0,  0,  1,
-             0, -1,  0
-        );
-
-    } else if (dir == 6u) { // BACK (-Z)
+    } else if (dir == 5u) { // BACK (-Z)
         return mat3(
              1,  0,  0,
              0,  0, -1,
              0,  1,  0
         );
+    } else if (dir == 6u) { // FRONT (+Z)
+        return mat3(
+             1,  0,  0,
+             0,  0,  1,
+             0, -1,  0
+        );
     }
 
-    return mat3(1.0); // TOP
+    return mat3(1.0); // TOP (+Y)
 }
 
 void main() {

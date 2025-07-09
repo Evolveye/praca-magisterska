@@ -27,6 +27,7 @@ impl GeneratorOfRealisticallyTerrain {
 
 impl WorldGenerative for GeneratorOfRealisticallyTerrain {
     fn generate_chunk( &self, origin:(i64, i64, i64), size:u8, dataset:&mut VoxelDataset ) -> WorldChunk {
+        // println!( "Chunk generation {:?}, size={}", origin, size );
         let origin = (origin.0 * size as i64, origin.1 * size as i64, origin.2 * size as i64);
         let size = size as u32;
         let max_depth = Quadtree::get_max_depth_for( size );
@@ -75,6 +76,6 @@ impl WorldGenerative for GeneratorOfRealisticallyTerrain {
             to.1 + 1
         } );
 
-        WorldChunk::from_data( world_holder, origin )
+        WorldChunk::new( world_holder )
     }
 }

@@ -1,5 +1,5 @@
 use std::{ collections::{ HashMap, HashSet, VecDeque }, rc::Rc };
-use crate::world::world_holder::{ Voxel, VoxelSide, WorldHolding };
+use crate::world::{world::{CHUNK_SIZE, CHUNK_SIZE_X2}, world_chunk::ChunkBitmask, world_holder::{ Voxel, VoxelSide, WorldHolding }};
 
 struct Direction;
 
@@ -8,18 +8,18 @@ impl Direction {
     pub const UNSPECIFIED: u8 = 0;
     pub const LEFT:        u8 = 1;
     pub const RIGHT:       u8 = 2;
-    pub const TOP:         u8 = 3;
-    pub const BOTTOM:      u8 = 4;
-    pub const FRONT:       u8 = 5;
-    pub const BACK:        u8 = 6;
+    pub const BOTTOM:      u8 = 3;
+    pub const TOP:         u8 = 4;
+    pub const BACK:        u8 = 5;
+    pub const FRONT:       u8 = 6;
 
     pub const OCTREE_NODE_INDICES: [[usize; 4]; 6] = [
         /* opposite to LEFT   */  [1, 3, 5, 7],
         /* opposite to RIGHT  */  [0, 2, 4, 6],
-        /* opposite to TOP    */  [0, 1, 4, 5],
         /* opposite to BOTTOM */  [2, 3, 6, 7],
-        /* opposite to FRONT  */  [0, 1, 2, 3],
+        /* opposite to TOP    */  [0, 1, 4, 5],
         /* opposite to BACK   */  [4, 5, 6, 7],
+        /* opposite to FRONT  */  [0, 1, 2, 3],
     ];
 
     fn get_octree_node_indices_for_opposite_side( direction:u8 ) -> [usize; 4] {
@@ -79,10 +79,10 @@ impl Direction {
             0 => String::from( "UNSPECIFIED" ),
             1 => String::from( "LEFT" ),
             2 => String::from( "RIGHT" ),
-            3 => String::from( "TOP" ),
-            4 => String::from( "BOTTOM" ),
-            5 => String::from( "FRONT" ),
-            6 => String::from( "BACK" ),
+            3 => String::from( "BOTTOM" ),
+            4 => String::from( "TOP" ),
+            5 => String::from( "BACK" ),
+            6 => String::from( "FRONT" ),
             _ => unreachable!( "Unknown direction value" )
         }
     }
@@ -289,6 +289,42 @@ impl<T> OctreeNode<T> {
         (parent_offset.0 + dx, parent_offset.1 + dy, parent_offset.2 + dz)
     }
 
+    fn fill_bitmask( &self, mask:&mut ChunkBitmask, max_depth:u8, reversed_depth:u8, node_offset:(u32, u32, u32) ) {
+        let node_size = 1 << reversed_depth;
+
+        match self {
+            OctreeNode::Leaf( voxel ) => {
+                if voxel.is_some() {
+                    let nx = node_offset.0 as usize;
+                    let ny = node_offset.1 as usize;
+                    let nz = node_offset.2 as usize;
+
+                    for x in nx..nx + node_size as usize {
+                        for y in ny..ny + node_size as usize {
+                            for z in nz..nz + node_size as usize {
+                                // y,z = x axis
+                                mask.data[ y + (z * CHUNK_SIZE)                     ] |= 1 << x;
+
+                                // x,z = y axis
+                                mask.data[ x + (z * CHUNK_SIZE) + CHUNK_SIZE_X2     ] |= 1 << y;
+
+                                // x,y = z axis
+                                mask.data[ x + (y * CHUNK_SIZE) + CHUNK_SIZE_X2 * 2 ] |= 1 << z;
+                            }
+                        }
+                    }
+                }
+            }
+
+            OctreeNode::Branch( branch ) => {
+                for (i, child) in branch.children.iter().enumerate() {
+                    let child_offset = OctreeNode::<Voxel>::get_child_offset( node_offset, node_size, i );
+                    child.fill_bitmask( mask, max_depth, reversed_depth - 1, child_offset );
+                }
+            }
+        }
+    }
+
     fn contains_point( offset:&(u32, u32, u32), size:u32, point:&(u32, u32, u32) ) -> bool {
         point.0 >= offset.0 && point.0 < offset.0 + size &&
         point.1 >= offset.1 && point.1 < offset.1 + size &&
@@ -464,8 +500,8 @@ impl Octree<Voxel> {
                         for y in 0..point.source_size {
                             for z in 0..point.source_size {
                                 let coords = (x, point.coords.1 + y, point.coords.2 + z);
-                                result.entry( (coords, point.check_dir) ).or_insert_with( || VoxelSide::from_voxel_rc( coords.0, coords.1, coords.2, Direction::get_opposite( point.check_dir ), &data ) );
-                                // result.entry( (coords, point.check_dir) ).or_insert_with( || VoxelSide::from_voxel_rc( coords.0, coords.1, coords.2, point.check_dir, &data ) );
+                                result.entry( (coords, point.check_dir) ).or_insert_with( || VoxelSide::from_voxel_rc( coords.0 as i64, coords.1 as i64, coords.2 as i64, Direction::get_opposite( point.check_dir ), &data ) );
+                                // result.entry( (coords, point.check_dir) ).or_insert_with( || VoxelSide::from_voxel_rc( coords.0 as i64, coords.1 as i64, coords.2 as i64, point.check_dir, &data ) );
                             }
                         }
                     }
@@ -476,8 +512,8 @@ impl Octree<Voxel> {
                         for x in 0..point.source_size {
                             for z in 0..point.source_size {
                                 let coords = (point.coords.0 + x, y, point.coords.2 + z);
-                                result.entry( (coords, point.check_dir) ).or_insert_with( || VoxelSide::from_voxel_rc( coords.0, coords.1, coords.2, Direction::get_opposite( point.check_dir ), &data ) );
-                                // result.entry( (coords, point.check_dir) ).or_insert_with( || VoxelSide::from_voxel_rc( coords.0, coords.1, coords.2, point.check_dir, &data ) );
+                                result.entry( (coords, point.check_dir) ).or_insert_with( || VoxelSide::from_voxel_rc( coords.0 as i64, coords.1 as i64, coords.2 as i64, Direction::get_opposite( point.check_dir ), &data ) );
+                                // result.entry( (coords, point.check_dir) ).or_insert_with( || VoxelSide::from_voxel_rc( coords.0 as i64, coords.1 as i64, coords.2 as i64, point.check_dir, &data ) );
                             }
                         }
                     }
@@ -488,8 +524,8 @@ impl Octree<Voxel> {
                         for x in 0..point.source_size {
                             for y in 0..point.source_size {
                                 let coords = (point.coords.0 + x, point.coords.1 + y, z);
-                                result.entry( (coords, point.check_dir) ).or_insert_with( || VoxelSide::from_voxel_rc( coords.0, coords.1, coords.2, Direction::get_opposite( point.check_dir ), &data ) );
-                                // result.entry( (coords, point.check_dir) ).or_insert_with( || VoxelSide::from_voxel_rc( coords.0, coords.1, coords.2, point.check_dir, &data ) );
+                                result.entry( (coords, point.check_dir) ).or_insert_with( || VoxelSide::from_voxel_rc( coords.0 as i64, coords.1 as i64, coords.2 as i64, Direction::get_opposite( point.check_dir ), &data ) );
+                                // result.entry( (coords, point.check_dir) ).or_insert_with( || VoxelSide::from_voxel_rc( coords.0 as i64, coords.1 as i64, coords.2 as i64, point.check_dir, &data ) );
                             }
                         }
                     }
@@ -677,6 +713,17 @@ impl WorldHolding for Octree<Voxel> {
     fn fill_voxels( &mut self, from:(u32, u32, u32), to:(u32, u32, u32), voxel:Option<Rc<Voxel>> ) {
         let size = 1u32 << self.max_depth;
         self.root.fill_at( self.max_depth, (0, 0, 0), size, from, to, voxel );
+    }
+
+    fn to_bitmask( &self ) -> ChunkBitmask {
+        let size = 1 << (self.max_depth * 3); // 2^(depth*3)
+        let mut mask = ChunkBitmask::new( size );
+
+        // println!( "size={size}" );
+        // println!( "World chunk to bitmask. Max depth = {}, chunk size = {}", self.max_depth, 1 << self.max_depth );
+
+        self.root.fill_bitmask( &mut mask, self.max_depth, self.max_depth, (0, 0, 0) );
+        mask
     }
 
     fn get_size( &self ) {

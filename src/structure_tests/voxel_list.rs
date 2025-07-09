@@ -1,6 +1,6 @@
 use std::{mem::size_of, rc::Rc};
 
-use crate::world::world_holder::{Voxel, VoxelSide, WorldHolding};
+use crate::world::{world_chunk::ChunkBitmask, world_holder::{Voxel, VoxelSide, WorldHolding}};
 
 pub struct VoxelInWorld {
     x: u32,
@@ -49,6 +49,10 @@ impl WorldHolding for VoxelList {
                 self.data.remove( index );
             }
         }
+    }
+
+    fn to_bitmask( &self ) -> ChunkBitmask {
+        todo!()
     }
 
     fn fill_voxels( &mut self, from:(u32, u32, u32), to:(u32, u32, u32), voxel:Option<Rc<Voxel>> ) {
