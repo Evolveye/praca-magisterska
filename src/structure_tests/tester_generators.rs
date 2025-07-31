@@ -14,13 +14,22 @@ use crate::{
 pub struct GeneratorOfRealisticallyTerrain {
     noise: SimplexNoise,
     noise_frequency: f64,
+    noise_amplitude: f64,
 }
 
 impl GeneratorOfRealisticallyTerrain {
     pub fn new( seed:u32) -> Self {
         Self {
             noise: SimplexNoise::new( seed ),
+
+            // noise_frequency: 0.1,
+            // noise_frequency: 0.05,
             noise_frequency: 0.025,
+            // noise_frequency: 0.013,
+            // noise_frequency: 0.005,
+            noise_amplitude: 10.0,
+            // noise_amplitude: 15.0,
+            // noise_amplitude: 20.0,
         }
     }
 }
@@ -43,19 +52,15 @@ impl WorldGenerative for GeneratorOfRealisticallyTerrain {
             )
         } );
 
-        // quadtree.set( 0, 0, 0.9 );
-        // quadtree.set( 0, 1, 0.8 );
         quadtree.proces_entire_tree( &mut |offset, size, noise_value| {
-            let multiplied_noise = noise_value * 10.0;
+            // if size < 2 { return offset.1 }
+
+            let multiplied_noise = noise_value * self.noise_amplitude;
             let current_min = grass_level + multiplied_noise as i64;
             if current_min < 0 || current_min < offset.1 as i64 { return offset.1 }
 
             let size = size - 1;
             let to = (offset.0 + size, current_min as u32, offset.2 + size);
-
-            // {
-            //     world_holder.fill_voxels( offset, to, Some( stone_voxel.clone() ) );
-            // }
 
             {
                 let below_water = current_min < grass_level - 5;
@@ -69,6 +74,12 @@ impl WorldGenerative for GeneratorOfRealisticallyTerrain {
                         else if too_high { 250 }
                         else { 10 },
                 };
+
+                // let grass_color = Color {
+                //     red: 10,
+                //     green: 200,
+                //     blue: 10,
+                // };
 
                 dataset.expand( fill_with( offset, to, &mut world_holder, (&format!( "grass_{}", current_min ), grass_color) ) );
             }

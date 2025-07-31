@@ -27,7 +27,7 @@ use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
 use std::time::Instant;
 
-use crate::window_manager::WindowManager;
+use crate::app::window_manager::WindowManager;
 use crate::world::world_holder::Voxel;
 
 use super::model::Model;

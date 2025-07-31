@@ -1,5 +1,6 @@
 use anyhow::Result;
 use cgmath::Vector3;
+use std::ffi::c_void;
 use std::{
   mem::size_of,
   ptr::copy_nonoverlapping as memcpy,
@@ -24,6 +25,10 @@ pub struct ModelStrip<TVertex> {
   pub instances_count: u32,
   pub instance_buffer: vk::Buffer,
   pub instance_buffer_memory: vk::DeviceMemory,
+  pub instance_buffer_capacity: u64,
+  pub instance_staging_buffer: vk::Buffer,
+  pub instance_staging_buffer_memory: vk::DeviceMemory,
+  pub instance_staging_mapped_memory: *mut c_void,
 }
 
 #[allow(dead_code)]
@@ -38,6 +43,10 @@ impl<TVertex> ModelStrip<TVertex> {
       instances_count: 0,
       instance_buffer: Default::default(),
       instance_buffer_memory: Default::default(),
+      instance_buffer_capacity: 0,
+      instance_staging_buffer: Default::default(),
+      instance_staging_buffer_memory: Default::default(),
+      instance_staging_mapped_memory: Default::default(),
     } )
   }
 
@@ -111,39 +120,55 @@ impl<TVertex> ModelStrip<TVertex> {
     Ok(( vertex_buffer, vertex_buffer_memory ))
   }
 
-  pub unsafe fn create_instance_buffer<T>( renderer:&Renderer, instances_data:Vec<T> ) -> Result<( vk::Buffer, vk::DeviceMemory )> {
-    let Renderer { ref instance, ref device, ref data, .. } = renderer;
+  pub unsafe fn update_instance_buffer<T>( &mut self, renderer:&Renderer, instances_data:Vec<T> ) -> Result<()> {
+      let Renderer { ref instance, ref device, ref data, .. } = renderer;
+      let size = (size_of::<T>() * instances_data.len() as usize) as u64;
 
-    let size = (size_of::<T>() * instances_data.len() as usize) as u64;
-    let ( staging_buffer, staging_buffer_memory ) = create_buffer(
-      instance,
-      device,
-      data.physical_device,
-      size,
-      vk::BufferUsageFlags::TRANSFER_SRC,
-      vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-    )?;
+      if size > self.instance_buffer_capacity {
+          if self.instance_buffer_capacity != 0 {
+              let _ = device.device_wait_idle();
 
-    let memory = device.map_memory( staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
+              device.unmap_memory( self.instance_staging_buffer_memory );
 
-    memcpy( instances_data.as_ptr(), memory.cast(), instances_data.len() as usize );
-    device.unmap_memory( staging_buffer_memory );
+              device.destroy_buffer( self.instance_buffer, None );
+              device.free_memory( self.instance_buffer_memory, None );
 
-    let ( instance_buffer, instance_buffer_memory ) = create_buffer(
-      instance,
-      device,
-      data.physical_device,
-      size,
-      vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
-      vk::MemoryPropertyFlags::DEVICE_LOCAL,
-    )?;
+              device.destroy_buffer( self.instance_staging_buffer, None );
+              device.free_memory( self.instance_staging_buffer_memory, None );
+          }
 
-    copy_buffer( device, data.command_pool, data.graphics_queue, staging_buffer, instance_buffer, size )?;
+          let ( staging_buffer, staging_buffer_memory ) = create_buffer(
+              instance,
+              device,
+              data.physical_device,
+              size,
+              vk::BufferUsageFlags::TRANSFER_SRC,
+              vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
+          )?;
 
-    device.destroy_buffer( staging_buffer, None );
-    device.free_memory( staging_buffer_memory, None );
+          let ( instance_buffer, instance_buffer_memory ) = create_buffer(
+              instance,
+              device,
+              data.physical_device,
+              size,
+              vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
+              vk::MemoryPropertyFlags::DEVICE_LOCAL,
+          )?;
 
-    Ok(( instance_buffer, instance_buffer_memory ))
+          self.instance_buffer = instance_buffer;
+          self.instance_buffer_memory = instance_buffer_memory;
+          self.instance_staging_buffer = staging_buffer;
+          self.instance_staging_buffer_memory = staging_buffer_memory;
+          self.instance_staging_mapped_memory = device.map_memory( self.instance_staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
+          self.instance_buffer_capacity = size;
+
+          println!( "Model instances buffer has been expaded" );
+      }
+
+      memcpy( instances_data.as_ptr(), self.instance_staging_mapped_memory.cast(), instances_data.len() as usize );
+      copy_buffer( device, data.command_pool, data.graphics_queue, self.instance_staging_buffer, self.instance_buffer, size )?;
+
+      Ok(())
   }
 
   pub unsafe fn update_instances_buffer_with_defaults( &mut self, renderer:&Renderer, instances_count:u32 ) -> Result<()> {
@@ -168,12 +193,8 @@ impl<TVertex> ModelStrip<TVertex> {
   }
 
   pub unsafe fn update_instances_buffer<T>( &mut self, renderer:&Renderer, instances_data:Vec<T> ) -> Result<()> {
-    let instances_count = instances_data.len() as u32;
-    let ( instance_buffer, instance_buffer_memory ) = Self::create_instance_buffer::<T>( renderer, instances_data )?;
-
-    self.instance_buffer = instance_buffer;
-    self.instance_buffer_memory = instance_buffer_memory;
-    self.instances_count = instances_count;
+    self.instances_count = instances_data.len() as u32;
+    self.update_instance_buffer( renderer, instances_data )?;
 
     Ok(())
   }
@@ -184,6 +205,9 @@ impl<TVertex> ModelStrip<TVertex> {
 
     device.destroy_buffer( self.instance_buffer, None );
     device.free_memory( self.instance_buffer_memory, None );
+
+    device.destroy_buffer( self.instance_staging_buffer, None );
+    device.free_memory( self.instance_staging_buffer_memory, None );
   }
 }
 

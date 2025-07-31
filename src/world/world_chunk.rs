@@ -1,13 +1,17 @@
+use cgmath::Vector3;
+
 use crate::{
-    structure_tests::octree::Octree,
-    world::{
-        world::{ CHUNK_SIZE, CHUNK_SIZE_X2, CHUNK_SIZE_X3 },
-        world_holder::{ Voxel, VoxelSide, WorldHolding }
+    structure_tests::octree::Octree, world::{
+        world::{ GridPosition, Position, CHUNK_SIZE, CHUNK_SIZE_X2, CHUNK_SIZE_X3 },
+        world_holder::{ Color, Voxel, VoxelSide, WorldHolding }
     }
 };
 
+pub enum WorldChunkState { Calculable, FullySimulable, Dirty }
+
 #[allow(dead_code)]
 pub struct WorldChunk {
+    pub state: WorldChunkState,
     pub data: Octree<Voxel>,
     pub renderables: Vec<VoxelSide>,
     pub solids_mask: ChunkBitmask,
@@ -18,13 +22,33 @@ impl WorldChunk {
         let solids_mask = data.to_bitmask();
 
         Self {
+            state: WorldChunkState::Dirty,
             data,
             renderables: vec![],
             solids_mask,
         }
     }
 
-    pub fn remesh( &mut self, mut offset:(i64, i64, i64), neighbours:[&WorldChunk; 26] ) {
+    pub fn remesh( &mut self, mut offset:GridPosition, neighbours:[&WorldChunk; 26] ) -> bool {
+        if matches!( self.state, WorldChunkState::Calculable ) {
+            let center_x = (offset.0 + CHUNK_SIZE as i64 / 2) as f32;
+            let center_y = (offset.0 + CHUNK_SIZE as i64 / 2) as f32;
+            let center_z = (offset.0 + CHUNK_SIZE as i64 / 2) as f32;
+
+            self.renderables = vec![
+                VoxelSide::new( Vector3::new( center_x, center_y +  0.0, center_z ), Color { red:255, green:0, blue:0 }, 4 ),
+                VoxelSide::new( Vector3::new( center_x, center_y + 10.0, center_z ), Color { red:255, green:0, blue:0 }, 4 ),
+                VoxelSide::new( Vector3::new( center_x, center_y + 20.0, center_z ), Color { red:255, green:0, blue:0 }, 4 ),
+                VoxelSide::new( Vector3::new( center_x, center_y + 30.0, center_z ), Color { red:255, green:0, blue:0 }, 4 ),
+                VoxelSide::new( Vector3::new( center_x, center_y + 40.0, center_z ), Color { red:255, green:0, blue:0 }, 4 ),
+                VoxelSide::new( Vector3::new( center_x, center_y + 50.0, center_z ), Color { red:255, green:0, blue:0 }, 4 ),
+                VoxelSide::new( Vector3::new( center_x, center_y + 60.0, center_z ), Color { red:255, green:0, blue:0 }, 4 ),
+            ]
+        }
+        if matches!( self.state, WorldChunkState::FullySimulable ) {
+            return false
+        }
+
         // self.renderables = self.data.get_visible_with_flood( (0, self.data.get_size() as u32 - 1, 0) )
         //     .into_iter()
         //     .filter_map( |mut s| {
@@ -95,6 +119,9 @@ impl WorldChunk {
         }
 
         self.renderables = renderables;
+        self.state = WorldChunkState::FullySimulable;
+
+        true
     }
 
     #[allow(unused)]
@@ -134,6 +161,16 @@ impl WorldChunk {
         }
 
         println!();
+    }
+
+    pub fn get_chunk_position_from_world_position( world_position:Position ) -> GridPosition {
+        let chunk_size = CHUNK_SIZE as i64;
+
+        (
+            (world_position.0 as i64).div_euclid( chunk_size ),
+            (world_position.1 as i64).div_euclid( chunk_size ),
+            (world_position.2 as i64).div_euclid( chunk_size )
+        )
     }
 }
 

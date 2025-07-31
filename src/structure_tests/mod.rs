@@ -6,7 +6,7 @@ pub mod octree;
 pub mod quadtree;
 pub mod voxel_hasher;
 
-use std::time::Instant;
+use std::{time::Instant};
 
 use tester::{Tester, WORLD_X};
 
@@ -22,12 +22,14 @@ use voxel_list::VoxelList;
 #[allow(unused_imports)]
 use voxel_map::VoxelMap;
 
-use crate::{structure_tests::tester_generators::GeneratorOfRealisticallyTerrain, world::{world::World, world_holder::{Voxel, WorldHolding}}};
+use crate::{structure_tests::tester_generators::GeneratorOfRealisticallyTerrain, world::{world::{ChunkLoaderhandle, World, CHUNK_SIZE}, world_holder::{Voxel, WorldHolding}}};
 
-pub fn generate_world_as_world() -> World {
+pub fn generate_world_as_world() -> (World, ChunkLoaderhandle) {
     let world_generator = GeneratorOfRealisticallyTerrain::new( 50 );
-    let world = World::new( 4, world_generator );
-    world
+    let mut world = World::new( Box::new( world_generator ) );
+    let chunk_loader = world.create_chunk_loader( (CHUNK_SIZE as f32 / 2.0, 20.0, CHUNK_SIZE as f32 / 2.0), 3 );
+
+    (world, chunk_loader)
 }
 
 #[allow(dead_code)]
