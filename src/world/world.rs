@@ -50,6 +50,8 @@ impl World {
 
         start_chunk_worker( &chunks_dataset, cmd_rx, res_tx );
 
+        let _ = cmd_tx.send( ChunkCmd::GenerateChunks( (1,1,1), 1 ) );
+
         Self {
             chunks_dataset,
             dataset: VoxelDataset::new(),

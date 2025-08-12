@@ -2,7 +2,7 @@ use std::{
     collections::HashMap, sync::{ mpsc,Arc, RwLock }, thread, vec
 };
 
-use crate::world::{world::{ GridPosition, Position, CHUNK_SIZE as CHUNK_SIZE_USIZE }, world_chunk::{WorldChunk, WorldChunkState}, world_generator::WorldGenerative, world_holder::VoxelDataset};
+use crate::world::{chunk_region_iterator::ChunkRegionIterator, world::{ GridPosition, Position, CHUNK_SIZE as CHUNK_SIZE_USIZE }, world_chunk::{WorldChunk, WorldChunkState}, world_generator::WorldGenerative, world_holder::VoxelDataset};
 
 const CHUNK_SIZE:i64 = CHUNK_SIZE_USIZE as i64;
 
@@ -11,6 +11,7 @@ type WorldChunkCoord = i64;
 pub struct ChunksDataset {
     pub chunks: RwLock<HashMap<(WorldChunkCoord, WorldChunkCoord, WorldChunkCoord), RwLock<WorldChunk>>>,
     pub default_generator: Box<dyn WorldGenerative>,
+    pub worker_tasks: Vec<ChunkCmd>,
 }
 
 impl ChunksDataset {
@@ -18,12 +19,14 @@ impl ChunksDataset {
         Self {
             chunks: RwLock::new( HashMap::new() ),
             default_generator,
+            worker_tasks: vec![],
         }
     }
 }
 
 #[allow(dead_code)]
 pub enum ChunkCmd {
+    GenerateChunks( GridPosition, u8 ),
     EnsureChunks( GridPosition, u8 ),
     FillChunks( GridPosition, u8 ),
     UpdateChunkLoaderChunks( Position, Position, u8 ),
@@ -50,6 +53,9 @@ pub fn start_chunk_worker( chunks_dataset:&Arc<ChunksDataset>, rx:mpsc::Receiver
                     // UpdateChunkLoaderChunks -> ChunksStateUpdate
 
                     match cmd {
+                        ChunkCmd::GenerateChunks( position, render_distance ) => {
+                            generate_chunks( position, 0 );
+                        }
                         ChunkCmd::EnsureChunks( position, render_distance ) => {
                             create_missing_chunks( &tx, &chunks_dataset, position, render_distance as i64 );
                         },
@@ -57,56 +63,77 @@ pub fn start_chunk_worker( chunks_dataset:&Arc<ChunksDataset>, rx:mpsc::Receiver
                             generate_chunk_filling( &chunks_dataset, position, render_distance as i64 );
                         }
                         ChunkCmd::UpdateChunkLoaderChunks( position, move_to, render_distance ) => {
-                            let render_distance = render_distance as i64;
-                            let loader_chunk_x = (position.0 as i64).div_euclid( CHUNK_SIZE );
-                            let loader_chunk_y = (position.1 as i64).div_euclid( CHUNK_SIZE );
-                            let loader_chunk_z = (position.2 as i64).div_euclid( CHUNK_SIZE );
-
-                            let move_to_chunk_x = (move_to.0 as i64).div_euclid( CHUNK_SIZE );
-                            let move_to_chunk_y = (move_to.1 as i64).div_euclid( CHUNK_SIZE );
-                            let move_to_chunk_z = (move_to.2 as i64).div_euclid( CHUNK_SIZE );
-
-                            let shift_x = move_to_chunk_x - loader_chunk_x;
-                            let shift_y = move_to_chunk_y - loader_chunk_y;
-                            let shift_z = move_to_chunk_z - loader_chunk_z;
-
-                            if shift_x | shift_y | shift_z == 0 {
-                                continue
-                            }
-
-                            let move_to_chunk = (move_to_chunk_x, move_to_chunk_y, move_to_chunk_z);
-                            // println!( "gen: New chunk {move_to_chunk:?}" );
-
-                            let render_distance_addition_surrounding_x = shift_x.signum() * (render_distance + 1);
-                            let render_distance_addition_surrounding_y = shift_y.signum() * (render_distance + 1);
-                            let render_distance_addition_surrounding_z = shift_z.signum() * (render_distance + 1);
-
-                            let render_distance_addition_rendering_x = shift_x.signum() * render_distance;
-                            let render_distance_addition_rendering_y = shift_y.signum() * render_distance;
-                            let render_distance_addition_rendering_z = shift_z.signum() * render_distance;
-
-                            let from_s_x = loader_chunk_x - render_distance_addition_surrounding_x;
-                            let from_s_y = loader_chunk_y - render_distance_addition_surrounding_y;
-                            let from_s_z = loader_chunk_z - render_distance_addition_surrounding_z;
-
-                            let from_r_x = loader_chunk_x - render_distance_addition_rendering_x;
-                            let from_r_y = loader_chunk_y - render_distance_addition_rendering_y;
-                            let from_r_z = loader_chunk_z - render_distance_addition_rendering_z;
-
-                            let mut update_coords = (vec![], vec![]);
-
-                            axis_processor( &mut update_coords, from_s_x, from_r_x, shift_x, loader_chunk_y, loader_chunk_z, render_distance, &|a, b, c| (a, b, c) );
-                            axis_processor( &mut update_coords, from_s_y, from_r_y, shift_y, loader_chunk_x, loader_chunk_z, render_distance, &|a, b, c| (b, a, c) );
-                            axis_processor( &mut update_coords, from_s_z, from_r_z, shift_z, loader_chunk_x, loader_chunk_y, render_distance, &|a, b, c| (b, c, a) );
-
-                            let _ = tx.send( ChunkRes::ChunksStateUpdate( update_coords.0, update_coords.1 ) );
-                            create_missing_chunks( &tx, &chunks_dataset, move_to_chunk, render_distance );
+                            update_chunk_loader_chunks( &tx, &chunks_dataset, position, move_to, render_distance );
                         }
                     }
                 }
             }
         } )
         .expect( "Failed to spawn thread" );
+}
+
+fn generate_chunks( position:GridPosition, from:usize ) {
+    let mut cube_layer_iter = ChunkRegionIterator::with_range( 0..100 );
+    let mut i = 0;
+
+    loop {
+        let Some( next ) = cube_layer_iter.next() else { break };
+        println!( "{i: >2} | side={}, {:?}", cube_layer_iter.side, next );
+
+        if i > 30 { break }
+        i += 1;
+    }
+}
+
+fn iterate_throught_cube_layer( layer:u8 ) {
+
+}
+
+fn update_chunk_loader_chunks( tx:&mpsc::Sender<ChunkRes>, chunks_dataset:&Arc<ChunksDataset>, position:Position, move_to:Position, render_distance:u8 ) {
+    let render_distance = render_distance as i64;
+    let loader_chunk_x = (position.0 as i64).div_euclid( CHUNK_SIZE );
+    let loader_chunk_y = (position.1 as i64).div_euclid( CHUNK_SIZE );
+    let loader_chunk_z = (position.2 as i64).div_euclid( CHUNK_SIZE );
+
+    let move_to_chunk_x = (move_to.0 as i64).div_euclid( CHUNK_SIZE );
+    let move_to_chunk_y = (move_to.1 as i64).div_euclid( CHUNK_SIZE );
+    let move_to_chunk_z = (move_to.2 as i64).div_euclid( CHUNK_SIZE );
+
+    let shift_x = move_to_chunk_x - loader_chunk_x;
+    let shift_y = move_to_chunk_y - loader_chunk_y;
+    let shift_z = move_to_chunk_z - loader_chunk_z;
+
+    if shift_x | shift_y | shift_z == 0 {
+        return
+    }
+
+    let move_to_chunk = (move_to_chunk_x, move_to_chunk_y, move_to_chunk_z);
+    // println!( "gen: New chunk {move_to_chunk:?}" );
+
+    let render_distance_addition_surrounding_x = shift_x.signum() * (render_distance + 1);
+    let render_distance_addition_surrounding_y = shift_y.signum() * (render_distance + 1);
+    let render_distance_addition_surrounding_z = shift_z.signum() * (render_distance + 1);
+
+    let render_distance_addition_rendering_x = shift_x.signum() * render_distance;
+    let render_distance_addition_rendering_y = shift_y.signum() * render_distance;
+    let render_distance_addition_rendering_z = shift_z.signum() * render_distance;
+
+    let from_s_x = loader_chunk_x - render_distance_addition_surrounding_x;
+    let from_s_y = loader_chunk_y - render_distance_addition_surrounding_y;
+    let from_s_z = loader_chunk_z - render_distance_addition_surrounding_z;
+
+    let from_r_x = loader_chunk_x - render_distance_addition_rendering_x;
+    let from_r_y = loader_chunk_y - render_distance_addition_rendering_y;
+    let from_r_z = loader_chunk_z - render_distance_addition_rendering_z;
+
+    let mut update_coords = (vec![], vec![]);
+
+    axis_processor( &mut update_coords, from_s_x, from_r_x, shift_x, loader_chunk_y, loader_chunk_z, render_distance, &|a, b, c| (a, b, c) );
+    axis_processor( &mut update_coords, from_s_y, from_r_y, shift_y, loader_chunk_x, loader_chunk_z, render_distance, &|a, b, c| (b, a, c) );
+    axis_processor( &mut update_coords, from_s_z, from_r_z, shift_z, loader_chunk_x, loader_chunk_y, render_distance, &|a, b, c| (b, c, a) );
+
+    let _ = tx.send( ChunkRes::ChunksStateUpdate( update_coords.0, update_coords.1 ) );
+    create_missing_chunks( &tx, &chunks_dataset, move_to_chunk, render_distance );
 }
 
 fn axis_processor(
