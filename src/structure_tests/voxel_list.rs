@@ -1,12 +1,12 @@
-use std::{mem::size_of, rc::Rc};
+use std::{ mem::size_of, sync::Arc };
 
-use crate::world::{world_chunk::ChunkBitmask, world_holder::{Voxel, VoxelSide, WorldHolding}};
+use crate::world::{ world_chunk::ChunkBitmask, world_holder::{ Voxel, VoxelSide, WorldHolding } };
 
 pub struct VoxelInWorld {
     x: u32,
     y: u32,
     z: u32,
-    voxel: Rc<Voxel>
+    voxel: Arc<Voxel>
 }
 
 pub struct VoxelList {
@@ -23,14 +23,14 @@ impl VoxelList {
 }
 
 impl WorldHolding for VoxelList {
-    fn get_voxel( &self, x:u32, y:u32, z:u32 ) -> Option<std::rc::Rc<Voxel>> {
+    fn get_voxel( &self, x:u32, y:u32, z:u32 ) -> Option<Arc<Voxel>> {
         match self.data.iter().find( |v| v.x == x && v.y == y && v.z == z ) {
             Some( voxel_in_world ) => Some( voxel_in_world.voxel.clone() ),
             None => None
         }
     }
 
-    fn get_all_voxels( &self ) -> Vec<(u32, u32, u32, Rc<Voxel>)> {
+    fn get_all_voxels( &self ) -> Vec<(u32, u32, u32, Arc<Voxel>)> {
         todo!()
     }
 
@@ -38,7 +38,7 @@ impl WorldHolding for VoxelList {
         todo!()
     }
 
-    fn set_voxel( &mut self, x:u32, y:u32, z:u32, voxel:Option<Rc<Voxel>> ) {
+    fn set_voxel( &mut self, x:u32, y:u32, z:u32, voxel:Option<Arc<Voxel>> ) {
         if let Some( voxel ) = voxel {
             match self.data.iter_mut().find( |v| v.x == x && v.y == y && v.z == z ) {
                 Some( voxel_in_world ) => voxel_in_world.voxel = voxel,
@@ -55,7 +55,7 @@ impl WorldHolding for VoxelList {
         todo!()
     }
 
-    fn fill_voxels( &mut self, from:(u32, u32, u32), to:(u32, u32, u32), voxel:Option<Rc<Voxel>> ) {
+    fn fill_voxels( &mut self, from:(u32, u32, u32), to:(u32, u32, u32), voxel:Option<Arc<Voxel>> ) {
         let (x_min, x_max) = (from.0.min( to.0 ), from.0.max( to.0 ));
         let (y_min, y_max) = (from.1.min( to.1 ), from.1.max( to.1 ));
         let (z_min, z_max) = (from.2.min( to.2 ), from.2.max( to.2 ));
@@ -95,7 +95,7 @@ impl WorldHolding for VoxelList {
         let voxel_in_world_size = size_of::<VoxelInWorld>();
         println!( " - voxel in world size = {}", voxel_in_world_size );
 
-        let voxel_size = size_of::<Rc<Voxel>>();
+        let voxel_size = size_of::<Arc<Voxel>>();
         println!( " - voxel size = {}", voxel_size );
 
         let list_size = self.data.len() * voxel_in_world_size * voxel_size;

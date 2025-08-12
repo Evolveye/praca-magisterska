@@ -1,11 +1,11 @@
-use std::{mem::size_of, rc::Rc};
+use std::{ mem::size_of, sync::Arc };
 
 use crate::world::{world_chunk::ChunkBitmask, world_holder::{Voxel, VoxelSide, WorldHolding}};
 
 use super::tester::*;
 
 pub struct VoxelMap {
-    pub data: Vec<Vec<Vec<Option<Rc<Voxel>>>>>,
+    pub data: Vec<Vec<Vec<Option<Arc<Voxel>>>>>,
     pub filled_cells: u32,
 }
 
@@ -20,11 +20,11 @@ impl VoxelMap {
 }
 
 impl WorldHolding for VoxelMap {
-    fn get_voxel( &self, x:u32, y:u32, z:u32 ) -> Option<Rc<Voxel>> {
+    fn get_voxel( &self, x:u32, y:u32, z:u32 ) -> Option<Arc<Voxel>> {
         self.data[ z as usize ][ y as usize ][ x as usize ].clone()
     }
 
-    fn get_all_voxels( &self ) -> Vec<(u32, u32, u32, Rc<Voxel>)> {
+    fn get_all_voxels( &self ) -> Vec<(u32, u32, u32, Arc<Voxel>)> {
         todo!()
     }
 
@@ -36,7 +36,7 @@ impl WorldHolding for VoxelMap {
         todo!()
     }
 
-    fn set_voxel( &mut self, x:u32, y:u32, z:u32, voxel:Option<Rc<Voxel>> ) {
+    fn set_voxel( &mut self, x:u32, y:u32, z:u32, voxel:Option<Arc<Voxel>> ) {
         if self.data[z as usize][y as usize][x as usize].is_none() {
             if !voxel.is_none() {
                 self.filled_cells += 1;
@@ -51,7 +51,7 @@ impl WorldHolding for VoxelMap {
     }
 
 
-    fn fill_voxels( &mut self, from:(u32, u32, u32), to:(u32, u32, u32), voxel:Option<Rc<Voxel>> ) {
+    fn fill_voxels( &mut self, from:(u32, u32, u32), to:(u32, u32, u32), voxel:Option<Arc<Voxel>> ) {
         let (x_min, x_max) = (from.0.min(to.0), from.0.max(to.0));
         let (y_min, y_max) = (from.1.min(to.1), from.1.max(to.1));
         let (z_min, z_max) = (from.2.min(to.2), from.2.max(to.2));
@@ -71,16 +71,16 @@ impl WorldHolding for VoxelMap {
         let its_size = size_of::<Self>();
         println!( " - its size = {}", its_size );
 
-        let root_vec_size = size_of::<Vec<Vec<Vec<Option<Rc<Voxel>>>>>>();
+        let root_vec_size = size_of::<Vec<Vec<Vec<Option<Arc<Voxel>>>>>>();
         println!( " - root vector size = {}", root_vec_size );
 
-        let depth_vec_size = size_of::<Vec<Vec<Option<Rc<Voxel>>>>>();
+        let depth_vec_size = size_of::<Vec<Vec<Option<Arc<Voxel>>>>>();
         println!( " - depth vectors size = {} * {}", self.data.len(), depth_vec_size );
 
-        let row_vec_size = size_of::<Vec<Option<Rc<Voxel>>>>();
+        let row_vec_size = size_of::<Vec<Option<Arc<Voxel>>>>();
         println!( " - row vectors size = {} * {} * {}", self.data.len(), self.data[ 0 ].len(), row_vec_size );
 
-        let cell_size = size_of::<Option<Rc<Voxel>>>();
+        let cell_size = size_of::<Option<Arc<Voxel>>>();
         println!( " - column vectors size = {} * {} * {} * {}", self.data.len(), self.data[ 0 ].len(), self.data[ 0 ][ 0 ].len(), cell_size, );
 
         let depths_size = self.data.len() * depth_vec_size;

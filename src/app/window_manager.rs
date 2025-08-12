@@ -1,6 +1,6 @@
 use anyhow::Result;
 use winit::{
-  dpi::{ LogicalSize, PhysicalPosition },
+  dpi::{ LogicalPosition, LogicalSize, PhysicalPosition },
   event::WindowEvent,
   event_loop::EventLoop,
   window::{ Window, WindowBuilder }
@@ -20,7 +20,11 @@ impl WindowManager {
         let event_loop = EventLoop::new()?;
         let window = WindowBuilder::new()
             .with_title( "Vulkan Tutorial (Rust)" )
-            .with_inner_size( LogicalSize::new( 1024, 768 ) )
+            // .with_inner_size( LogicalSize::new( 1920, 1080 ) )
+            .with_inner_size( LogicalSize::new( 1366, 768 ) )
+            // .with_inner_size( LogicalSize::new( 1280, 720 ) )
+            // .with_inner_size( LogicalSize::new( 1024, 768 ) )
+            .with_position( LogicalPosition::new( 25, 25 ) )
             .build( &event_loop )?;
 
 

@@ -3,10 +3,9 @@ use crate::{
         octree::Octree, quadtree::Quadtree
     },
     world::{
-        world_chunk::WorldChunk,
         world_generator::WorldGenerative,
         world_holder::{
-            fill_with, Color, VoxelDataset
+            fill_with, Color, Voxel, VoxelDataset,
         }
     }
 };
@@ -35,7 +34,7 @@ impl GeneratorOfRealisticallyTerrain {
 }
 
 impl WorldGenerative for GeneratorOfRealisticallyTerrain {
-    fn generate_chunk( &self, origin:(i64, i64, i64), size:u8, dataset:&mut VoxelDataset ) -> WorldChunk {
+    fn generate_chunk( &self, dataset:&mut VoxelDataset, origin:(i64, i64, i64), size:u8 ) -> Octree<Voxel> {
         // println!( "Chunk generation {:?}, size={}", origin, size );
         let origin = (origin.0 * size as i64, origin.1 * size as i64, origin.2 * size as i64);
         let size = size as u32;
@@ -87,6 +86,6 @@ impl WorldGenerative for GeneratorOfRealisticallyTerrain {
             to.1 + 1
         } );
 
-        WorldChunk::new( world_holder )
+        world_holder
     }
 }

@@ -1,51 +1,53 @@
-use cgmath::Vector3;
+use std::sync::RwLockReadGuard;
 
 use crate::{
-    structure_tests::octree::Octree, world::{
+    structure_tests::octree::Octree,
+    world::{
         world::{ GridPosition, Position, CHUNK_SIZE, CHUNK_SIZE_X2, CHUNK_SIZE_X3 },
-        world_holder::{ Color, Voxel, VoxelSide, WorldHolding }
+        world_holder::{ Voxel, VoxelSide, WorldHolding }
     }
 };
 
-pub enum WorldChunkState { Calculable, FullySimulable, Dirty }
+#[derive(Debug)]
+pub enum WorldChunkState {
+    Empty,
+    Dirty,
+    Meshed,
+    Calculable,
+    Stashing,
+}
+
+struct WorldChunkData {
+    data: Octree<Voxel>,
+    solids_mask: ChunkBitmask,
+}
 
 #[allow(dead_code)]
 pub struct WorldChunk {
+    structure: Option<WorldChunkData>,
     pub state: WorldChunkState,
-    pub data: Octree<Voxel>,
     pub renderables: Vec<VoxelSide>,
-    pub solids_mask: ChunkBitmask,
 }
 
 impl WorldChunk {
-    pub fn new( data:Octree<Voxel> ) -> Self {
-        let solids_mask = data.to_bitmask();
+    pub fn new() -> Self {
 
         Self {
-            state: WorldChunkState::Dirty,
-            data,
+            state: WorldChunkState::Empty,
             renderables: vec![],
-            solids_mask,
+            structure: None
         }
     }
 
-    pub fn remesh( &mut self, mut offset:GridPosition, neighbours:[&WorldChunk; 26] ) -> bool {
-        if matches!( self.state, WorldChunkState::Calculable ) {
-            let center_x = (offset.0 + CHUNK_SIZE as i64 / 2) as f32;
-            let center_y = (offset.0 + CHUNK_SIZE as i64 / 2) as f32;
-            let center_z = (offset.0 + CHUNK_SIZE as i64 / 2) as f32;
+    pub fn set_data( &mut self, data:Octree<Voxel> ) {
+        self.structure = Some( WorldChunkData { solids_mask:data.to_bitmask(), data } );
+        self.state = WorldChunkState::Dirty;
+    }
 
-            self.renderables = vec![
-                VoxelSide::new( Vector3::new( center_x, center_y +  0.0, center_z ), Color { red:255, green:0, blue:0 }, 4 ),
-                VoxelSide::new( Vector3::new( center_x, center_y + 10.0, center_z ), Color { red:255, green:0, blue:0 }, 4 ),
-                VoxelSide::new( Vector3::new( center_x, center_y + 20.0, center_z ), Color { red:255, green:0, blue:0 }, 4 ),
-                VoxelSide::new( Vector3::new( center_x, center_y + 30.0, center_z ), Color { red:255, green:0, blue:0 }, 4 ),
-                VoxelSide::new( Vector3::new( center_x, center_y + 40.0, center_z ), Color { red:255, green:0, blue:0 }, 4 ),
-                VoxelSide::new( Vector3::new( center_x, center_y + 50.0, center_z ), Color { red:255, green:0, blue:0 }, 4 ),
-                VoxelSide::new( Vector3::new( center_x, center_y + 60.0, center_z ), Color { red:255, green:0, blue:0 }, 4 ),
-            ]
-        }
-        if matches!( self.state, WorldChunkState::FullySimulable ) {
+    pub fn remesh( &mut self, mut offset:GridPosition, neighbours:Vec<RwLockReadGuard<'_, WorldChunk>> ) -> bool {
+        let Some( ref structure ) = self.structure else { return false };
+
+        if matches!( self.state, WorldChunkState::Meshed ) {
             return false
         }
 
@@ -69,18 +71,21 @@ impl WorldChunk {
         let mut col_face_masks = vec![ 0; CHUNK_SIZE_X3 * 2 ];
         let neighbour_shift = CHUNK_SIZE - 1;
         let axies_neighbours = [
-            (neighbours[ 13 ], neighbours[ 12 ]),
-            (neighbours[ 21 ], neighbours[  4 ]),
-            (neighbours[ 15 ], neighbours[ 10 ]),
+            (&neighbours[ 13 ], &neighbours[ 12 ]),
+            (&neighbours[ 21 ], &neighbours[  4 ]),
+            (&neighbours[ 15 ], &neighbours[ 10 ]),
         ];
 
         for axis in 0..3 {
             for i in 0..CHUNK_SIZE_X2 {
                 let index = CHUNK_SIZE_X2 * axis + i;
-                let column = self.solids_mask.data[ index ];
+                let column = structure.solids_mask.data[ index ];
 
-                let neighbour_a_shift = (axies_neighbours[ axis ].0.solids_mask.data[ index ] & 1) << neighbour_shift;
-                let neighbour_b_shift = (axies_neighbours[ axis ].1.solids_mask.data[ index ] >> neighbour_shift) & 1;
+                let Some( ref neighbour_a_shift ) = axies_neighbours[ axis ].0.structure else { panic!( "Neighbours of remeshed chunk must have terrain" ) };
+                let neighbour_a_shift = (neighbour_a_shift.solids_mask.data[ index ] & 1) << neighbour_shift;
+
+                let Some( ref neighbour_b_shift ) = axies_neighbours[ axis ].1.structure else { panic!( "Neighbours of remeshed chunk must have terrain" ) };
+                let neighbour_b_shift = (neighbour_b_shift.solids_mask.data[ index ] >> neighbour_shift) & 1;
 
                 col_face_masks[ CHUNK_SIZE_X2 * (axis * 2    ) + i ] = column & !(column << 1 | neighbour_b_shift);
                 col_face_masks[ CHUNK_SIZE_X2 * (axis * 2 + 1) + i ] = column & !(column >> 1 | neighbour_a_shift);
@@ -102,7 +107,7 @@ impl WorldChunk {
                             _     => (x as u32, y as u32, z), // x,y=z 5,6 Z
                         };
 
-                        if let Some( voxel ) = self.data.get( voxel_pos.0, voxel_pos.1, voxel_pos.2 ) {
+                        if let Some( voxel ) = structure.data.get( voxel_pos.0, voxel_pos.1, voxel_pos.2 ) {
                             renderables.push( VoxelSide::from_voxel_rc(
                                 offset.0 + voxel_pos.0 as i64,
                                 offset.1 + voxel_pos.1 as i64,
@@ -119,14 +124,15 @@ impl WorldChunk {
         }
 
         self.renderables = renderables;
-        self.state = WorldChunkState::FullySimulable;
+        self.state = WorldChunkState::Meshed;
 
         true
     }
 
     #[allow(unused)]
     pub fn print_bitmask_layer( &self, layer:usize ) {
-        let size = self.data.get_size() as usize;
+        let Some( ref structure ) = self.structure else { return };
+        let size = structure.data.get_size() as usize;
         let mut num = 0;
 
         print!( "   " );
@@ -146,14 +152,14 @@ impl WorldChunk {
             print!( "\n{num} |" );
 
             for x in 0..size {
-                let bit = (self.solids_mask.data[ z + (layer * CHUNK_SIZE) + CHUNK_SIZE_X2     ] >> x) & 1;
+                let bit = (structure.solids_mask.data[ z + (layer * CHUNK_SIZE) + CHUNK_SIZE_X2     ] >> x) & 1;
                 print!("{}", if bit == 0 { " " } else { "#" } );
             }
 
             print!( "|" );
 
             for x in 0..size {
-                let bit = (self.solids_mask.data[ x + (layer * CHUNK_SIZE) + CHUNK_SIZE_X2 * 2 ] >> z) & 1;
+                let bit = (structure.solids_mask.data[ x + (layer * CHUNK_SIZE) + CHUNK_SIZE_X2 * 2 ] >> z) & 1;
                 print!("{}", if bit == 0 { " " } else { "#" } );
             }
 

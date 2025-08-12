@@ -71,6 +71,7 @@ impl App {
         }
 
         self.world.move_chunk_loader_to( &self.camera_chunk_loader, self.control_manager.position.into() );
+        self.world.update();
 
         self.control_manager.update( &self.settings, time_delta.as_secs_f32() );
 

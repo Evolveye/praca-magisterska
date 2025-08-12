@@ -1,4 +1,4 @@
-use std::{ collections::{ HashMap, HashSet, VecDeque }, rc::Rc };
+use std::{ collections::{ HashMap, HashSet, VecDeque }, sync::Arc};
 use crate::world::{world::{CHUNK_SIZE, CHUNK_SIZE_X2}, world_chunk::ChunkBitmask, world_holder::{ Voxel, VoxelSide, WorldHolding }};
 
 struct Direction;
@@ -90,12 +90,12 @@ impl Direction {
 
 #[derive(Debug)]
 pub enum OctreeNode<T> {
-    Leaf( Option<Rc<T>> ),
+    Leaf( Option<Arc<T>> ),
     Branch( Box<OctreeBranch<T>> ),
 }
 
 impl<T> OctreeNode<T> {
-    fn insert(&mut self, reversed_depth:u8, x:u32, y:u32, z:u32, value:Rc<T> ) {
+    fn insert(&mut self, reversed_depth:u8, x:u32, y:u32, z:u32, value:Arc<T> ) {
         match self {
             OctreeNode::Leaf( leaf ) => {
                 if reversed_depth == 0 {
@@ -122,7 +122,7 @@ impl<T> OctreeNode<T> {
         size: u32,
         fill_from: (u32, u32, u32),
         fill_to: (u32, u32, u32),
-        value: Option<Rc<T>>,
+        value: Option<Arc<T>>,
     ) {
         let (from_x, from_y, from_z) = fill_from;
         let (to_x, to_y, to_z) = fill_to;
@@ -176,7 +176,7 @@ impl<T> OctreeNode<T> {
         }
     }
 
-    fn get( &self, reversed_depth:u8, x:u32, y:u32, z:u32 ) -> Option<Rc<T>> {
+    fn get( &self, reversed_depth:u8, x:u32, y:u32, z:u32 ) -> Option<Arc<T>> {
         match self {
             OctreeNode::Leaf( value ) => value.clone(),
             OctreeNode::Branch( branch ) => {
@@ -186,9 +186,9 @@ impl<T> OctreeNode<T> {
         }
     }
 
-    fn collect_voxels( &self, offset:(u32, u32, u32), depth:u8, out:&mut Vec<(u32, u32, u32, Rc<T>)> ) {
+    fn collect_voxels( &self, offset:(u32, u32, u32), depth:u8, out:&mut Vec<(u32, u32, u32, Arc<T>)> ) {
         match self {
-            OctreeNode::Leaf(Some(voxel)) => {
+            OctreeNode::Leaf( Some( voxel ) ) => {
                 let size = 1 << depth;
                 for x in 0..size {
                     for y in 0..size {
@@ -197,7 +197,7 @@ impl<T> OctreeNode<T> {
                                 offset.0 + x,
                                 offset.1 + y,
                                 offset.2 + z,
-                                Rc::clone(voxel),
+                                Arc::clone(voxel),
                             ));
                         }
                     }
@@ -218,7 +218,7 @@ impl<T> OctreeNode<T> {
         }
     }
 
-    fn remove( &mut self, depth:u8, x:u32, y:u32, z:u32 ) -> Option<Rc<T>> {
+    fn remove( &mut self, depth:u8, x:u32, y:u32, z:u32 ) -> Option<Arc<T>> {
         match self {
             OctreeNode::Leaf( value ) => {
                 value.take()
@@ -257,7 +257,7 @@ impl<T> OctreeNode<T> {
         let are_all_the_same = match first_value.clone() {
             Some( value ) => branch.children.iter().skip( 1 ).all( |child| match child {
                 OctreeNode::Leaf( val_opt ) => match val_opt {
-                    Some( val ) => Rc::ptr_eq( val, &value ),
+                    Some( val ) => Arc::ptr_eq( val, &value ),
                     _ => false
                 }
                 _ => false,
@@ -338,13 +338,13 @@ pub struct OctreeBranch<T> {
 }
 
 impl<T> OctreeBranch<T> {
-    fn new_filled_by( value:Option<Rc<T>> ) -> Self {
+    fn new_filled_by( value:Option<Arc<T>> ) -> Self {
         Self {
             children: std::array::from_fn( |_| OctreeNode::Leaf( value.clone() ) ),
         }
     }
 
-    fn insert( &mut self, depth:u8, x:u32, y:u32, z:u32, value:Rc<T> ) {
+    fn insert( &mut self, depth:u8, x:u32, y:u32, z:u32, value:Arc<T> ) {
         let child_index = Self::get_child_index( depth, &(x, y, z) );
 
         if depth == 1 {
@@ -384,21 +384,21 @@ impl<T> Octree<T> {
         Self::new( Self::get_max_depth_for( max_size ) )
     }
 
-    pub fn insert( &mut self, x:u32, y:u32, z:u32, value:Rc<T> ) {
+    pub fn insert( &mut self, x:u32, y:u32, z:u32, value:Arc<T> ) {
         self.root.insert( self.max_depth, x, y, z, value )
     }
 
-    pub fn get( &self, x: u32, y: u32, z: u32) -> Option<Rc<T>> {
+    pub fn get( &self, x: u32, y: u32, z: u32) -> Option<Arc<T>> {
         self.root.get( self.max_depth, x, y, z )
     }
 
-    pub fn get_voxels(&self) -> Vec<(u32, u32, u32, Rc<T>)> {
+    pub fn get_voxels(&self) -> Vec<(u32, u32, u32, Arc<T>)> {
         let mut result = Vec::new();
         self.root.collect_voxels( (0, 0, 0), self.max_depth, &mut result );
         result
     }
 
-    pub fn remove( &mut self, x:u32, y:u32, z:u32 ) -> Option<Rc<T>>{
+    pub fn remove( &mut self, x:u32, y:u32, z:u32 ) -> Option<Arc<T>>{
         self.root.remove( self.max_depth, x, y, z )
     }
 
@@ -690,11 +690,11 @@ impl Octree<Voxel> {
 }
 
 impl WorldHolding for Octree<Voxel> {
-    fn get_voxel( &self, x:u32, y:u32, z:u32 ) -> Option<Rc<Voxel>> {
+    fn get_voxel( &self, x:u32, y:u32, z:u32 ) -> Option<Arc<Voxel>> {
         self.get( x, y, z )
     }
 
-    fn get_all_voxels( &self ) -> Vec<(u32, u32, u32, Rc<Voxel>)> {
+    fn get_all_voxels( &self ) -> Vec<(u32, u32, u32, Arc<Voxel>)> {
         self.get_voxels()
     }
 
@@ -702,7 +702,7 @@ impl WorldHolding for Octree<Voxel> {
         self.get_visible_with_flood( from )
     }
 
-    fn set_voxel( &mut self, x:u32, y:u32, z:u32, voxel:Option<Rc<Voxel>> ) {
+    fn set_voxel( &mut self, x:u32, y:u32, z:u32, voxel:Option<Arc<Voxel>> ) {
         if let Some( voxel ) = voxel {
             self.insert( x, y, z, voxel );
         } else {
@@ -710,7 +710,7 @@ impl WorldHolding for Octree<Voxel> {
         }
     }
 
-    fn fill_voxels( &mut self, from:(u32, u32, u32), to:(u32, u32, u32), voxel:Option<Rc<Voxel>> ) {
+    fn fill_voxels( &mut self, from:(u32, u32, u32), to:(u32, u32, u32), voxel:Option<Arc<Voxel>> ) {
         let size = 1u32 << self.max_depth;
         self.root.fill_at( self.max_depth, (0, 0, 0), size, from, to, voxel );
     }
@@ -734,7 +734,6 @@ impl WorldHolding for Octree<Voxel> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::rc::Rc;
 
     #[derive(Debug, PartialEq)]
     struct TestVoxel(i32);
@@ -742,7 +741,7 @@ mod tests {
     #[test]
     fn test_insert_and_get() {
         let mut octree = Octree::new( 4 );
-        let voxel = Rc::new( TestVoxel( 42 ) );
+        let voxel = Arc::new( TestVoxel( 42 ) );
         octree.insert( 3, 2, 1, voxel.clone() );
 
         assert_eq!( octree.get( 3, 2, 1 ), Some( voxel ) );
@@ -751,7 +750,7 @@ mod tests {
     #[test]
     fn test_compression() {
         let mut octree = Octree::new( 2 );
-        let voxel = Rc::new( TestVoxel( 7 ) );
+        let voxel = Arc::new( TestVoxel( 7 ) );
 
         for x in 0..(1 << 2) {
             for y in 0..(1 << 2) {
@@ -767,7 +766,7 @@ mod tests {
     #[test]
     fn test_insert_get_remove() {
         let mut octree = Octree::new( 3 );
-        let voxel = Rc::new( TestVoxel( 42 ) );
+        let voxel = Arc::new( TestVoxel( 42 ) );
 
         octree.insert( 3, 3, 3, voxel.clone() );
 
@@ -783,8 +782,8 @@ mod tests {
         let mut octree = Octree::new( 2 );
         assert_eq!( octree.count_leaves(), 1 );
 
-        let voxel1 = Rc::new( TestVoxel( 1 ) );
-        let voxel2 = Rc::new( TestVoxel( 2 ) );
+        let voxel1 = Arc::new( TestVoxel( 1 ) );
+        let voxel2 = Arc::new( TestVoxel( 2 ) );
 
         octree.insert( 0, 0, 0, voxel1.clone() );
         octree.insert( 3, 3, 3, voxel2.clone() );

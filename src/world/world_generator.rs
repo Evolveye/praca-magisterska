@@ -1,5 +1,8 @@
-use crate::world::{world_chunk::WorldChunk, world_holder::VoxelDataset};
+use crate::{
+    structure_tests::octree::Octree,
+    world::world_holder::{ Voxel, VoxelDataset }
+};
 
-pub trait WorldGenerative {
-    fn generate_chunk( &self, origin:(i64, i64, i64), size:u8, dataset:&mut VoxelDataset ) -> WorldChunk;
+pub trait WorldGenerative: Send + Sync {
+    fn generate_chunk( &self, dataset:&mut VoxelDataset, origin:(i64, i64, i64), size:u8 ) -> Octree<Voxel>;
 }

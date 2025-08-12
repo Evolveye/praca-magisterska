@@ -1,4 +1,4 @@
-use std::{cmp, collections::HashMap, rc::Rc};
+use std::{cmp, collections::HashMap, sync::Arc, rc::Rc};
 
 use rand::seq::IteratorRandom;
 
@@ -22,10 +22,10 @@ const WORLD_HALF_Y:u32 = WORLD_Y / 2;
 pub const WORLD_Z:u32 = WORLD_X;
 
 pub struct TestDataset {
-    pub materials: HashMap<String, Rc<Material>>,
-    pub colors: HashMap<String, Rc<Color>>,
-    pub common_voxel_dataset: HashMap<String, Rc<CommonVoxelData>>,
-    pub voxels: HashMap<String, Rc<Voxel>>,
+    pub materials: HashMap<String, Arc<Material>>,
+    pub colors: HashMap<String, Arc<Color>>,
+    pub common_voxel_dataset: HashMap<String, Arc<CommonVoxelData>>,
+    pub voxels: HashMap<String, Arc<Voxel>>,
 }
 
 impl TestDataset {
@@ -94,15 +94,15 @@ impl Tester {
 
     pub fn set_1( world_holder:&mut dyn WorldHolding ) -> TestDataset {
         let key = String::from( "default" );
-        let materials = HashMap::from([ (key.clone(), Rc::new( Material { _density:100 } )) ]);
+        let materials = HashMap::from([ (key.clone(), Arc::new( Material { _density:100 } )) ]);
 
-        let colors = HashMap::from([ (key.clone(), Rc::new( Color { red:50, green:100, blue:200 } )) ]);
-        let common_voxel_dataset = HashMap::from([ (key.clone(), Rc::new( CommonVoxelData {
-            _material:materials.get( &key ).unwrap().clone(),
-            _color:colors.get( &key ).unwrap().clone(),
+        let colors = HashMap::from([ (key.clone(), Arc::new( Color { red:50, green:100, blue:200 } )) ]);
+        let common_voxel_dataset = HashMap::from([ (key.clone(), Arc::new( CommonVoxelData {
+            material:materials.get( &key ).unwrap().clone(),
+            color:colors.get( &key ).unwrap().clone(),
         } ) ) ]);
 
-        let voxels = HashMap::from([ (key.clone(), Rc::new( Voxel {
+        let voxels = HashMap::from([ (key.clone(), Arc::new( Voxel {
             _common_data: common_voxel_dataset.get( &key ).unwrap().clone(),
             _individual_data: vec![],
         }) ) ]);
@@ -178,42 +178,42 @@ impl Tester {
         let grass_key = String::from( "grass" );
 
         let materials = HashMap::from([
-            (&stone_key, Rc::new( Material { _density:100 } )),
-            (&dirt_key, Rc::new( Material { _density:2 } )),
-            (&grass_key, Rc::new( Material { _density:4 } )),
+            (&stone_key, Arc::new( Material { _density:100 } )),
+            (&dirt_key, Arc::new( Material { _density:2 } )),
+            (&grass_key, Arc::new( Material { _density:4 } )),
         ]);
 
         let colors = HashMap::from([
-            (&stone_key, Rc::new( Color { red:50, green:50, blue:50 } )),
-            (&dirt_key, Rc::new( Color { red:100, green:60, blue:40 } )),
-            (&grass_key, Rc::new( Color { red:10, green:64, blue:10 } )),
+            (&stone_key, Arc::new( Color { red:50, green:50, blue:50 } )),
+            (&dirt_key, Arc::new( Color { red:100, green:60, blue:40 } )),
+            (&grass_key, Arc::new( Color { red:10, green:64, blue:10 } )),
         ]);
 
         let common_voxel_dataset = HashMap::from([
-            (&stone_key, Rc::new( CommonVoxelData {
-                _material: materials.get( &stone_key ).unwrap().clone(),
-                _color: colors.get( &stone_key ).unwrap().clone(),
+            (&stone_key, Arc::new( CommonVoxelData {
+                material: materials.get( &stone_key ).unwrap().clone(),
+                color: colors.get( &stone_key ).unwrap().clone(),
             } ) ),
-            (&dirt_key, Rc::new( CommonVoxelData {
-                _material: materials.get( &dirt_key ).unwrap().clone(),
-                _color: colors.get( &dirt_key ).unwrap().clone(),
+            (&dirt_key, Arc::new( CommonVoxelData {
+                material: materials.get( &dirt_key ).unwrap().clone(),
+                color: colors.get( &dirt_key ).unwrap().clone(),
             } ) ),
-            (&grass_key, Rc::new( CommonVoxelData {
-                _material: materials.get( &grass_key ).unwrap().clone(),
-                _color: colors.get( &grass_key ).unwrap().clone(),
+            (&grass_key, Arc::new( CommonVoxelData {
+                material: materials.get( &grass_key ).unwrap().clone(),
+                color: colors.get( &grass_key ).unwrap().clone(),
             } ) ),
         ]);
 
         let voxels = HashMap::from([
-            (&stone_key, Rc::new( Voxel {
+            (&stone_key, Arc::new( Voxel {
                 _common_data: common_voxel_dataset.get( &stone_key ).unwrap().clone(),
                 _individual_data: vec![],
             }) ),
-            (&dirt_key, Rc::new( Voxel {
+            (&dirt_key, Arc::new( Voxel {
                 _common_data: common_voxel_dataset.get( &dirt_key ).unwrap().clone(),
                 _individual_data: vec![],
             }) ),
-            (&grass_key, Rc::new( Voxel {
+            (&grass_key, Arc::new( Voxel {
                 _common_data: common_voxel_dataset.get( &grass_key ).unwrap().clone(),
                 _individual_data: vec![],
             }) ),
@@ -270,15 +270,15 @@ impl Tester {
 
     fn set_n( n:u32, world_holder:&mut dyn WorldHolding ) -> TestDataset {
         let key = String::from( "default" );
-        let materials = HashMap::from([ (key.clone(), Rc::new( Material { _density:100 } )) ]);
-        let colors = HashMap::from([ (key.clone(), Rc::new( Color { red:50, green:100, blue:200 } )) ]);
+        let materials = HashMap::from([ (key.clone(), Arc::new( Material { _density:100 } )) ]);
+        let colors = HashMap::from([ (key.clone(), Arc::new( Color { red:50, green:100, blue:200 } )) ]);
 
-        let common_voxel_dataset = HashMap::from([ (key.clone(), Rc::new( CommonVoxelData {
-            _material:materials.get( &key ).unwrap().clone(),
-            _color:colors.get( &key ).unwrap().clone(),
+        let common_voxel_dataset = HashMap::from([ (key.clone(), Arc::new( CommonVoxelData {
+            material:materials.get( &key ).unwrap().clone(),
+            color:colors.get( &key ).unwrap().clone(),
         } ) ) ]);
 
-        let voxels = HashMap::from([ (key.clone(), Rc::new( Voxel {
+        let voxels = HashMap::from([ (key.clone(), Arc::new( Voxel {
             _common_data: common_voxel_dataset.get( &key ).unwrap().clone(),
             _individual_data: vec![],
         }) ) ]);
@@ -298,15 +298,15 @@ impl Tester {
 
     fn set_n_random( n:u32, world_holder:&mut dyn WorldHolding ) -> TestDataset {
         let key = String::from( "default" );
-        let materials = HashMap::from([ (key.clone(), Rc::new( Material { _density:100 } )) ]);
-        let colors = HashMap::from([ (key.clone(), Rc::new( Color { red:50, green:100, blue:200 } )) ]);
+        let materials = HashMap::from([ (key.clone(), Arc::new( Material { _density:100 } )) ]);
+        let colors = HashMap::from([ (key.clone(), Arc::new( Color { red:50, green:100, blue:200 } )) ]);
 
-        let common_voxel_dataset = HashMap::from([ (key.clone(), Rc::new( CommonVoxelData {
-            _material:materials.get( &key ).unwrap().clone(),
-            _color:colors.get( &key ).unwrap().clone(),
+        let common_voxel_dataset = HashMap::from([ (key.clone(), Arc::new( CommonVoxelData {
+            material:materials.get( &key ).unwrap().clone(),
+            color:colors.get( &key ).unwrap().clone(),
         } ) ) ]);
 
-        let voxels = HashMap::from([ (key.clone(), Rc::new( Voxel {
+        let voxels = HashMap::from([ (key.clone(), Arc::new( Voxel {
             _common_data: common_voxel_dataset.get( &key ).unwrap().clone(),
             _individual_data: vec![],
         }) ) ]);
@@ -328,7 +328,7 @@ impl Tester {
         let mut materials = HashMap::new();
         let mut colors = HashMap::new();
         let mut common_voxel_dataset = HashMap::new();
-        let mut voxels:HashMap<_, Rc<Voxel>> = HashMap::new();
+        let mut voxels:HashMap<_, Arc<Voxel>> = HashMap::new();
 
         for num in 0..cmp::min( n, WORLD_Z * WORLD_Y * WORLD_X ) {
             let (x, y, z) = Self::get_3d_indices_from_n( num );
@@ -339,7 +339,7 @@ impl Tester {
             let color = match colors.get( &color_key ) {
                 Some(color) => color,
                 None => {
-                    colors.insert( color_key.clone(), Rc::new( Color { red, blue, green } ) );
+                    colors.insert( color_key.clone(), Arc::new( Color { red, blue, green } ) );
                     colors.get( &color_key ).unwrap()
                 }
             };
@@ -349,7 +349,7 @@ impl Tester {
             let material = match materials.get( &material_key ) {
                 Some( material ) => material,
                 None => {
-                    materials.insert( material_key.clone(), Rc::new( Material { _density: density } ) );
+                    materials.insert( material_key.clone(), Arc::new( Material { _density: density } ) );
                     materials.get( &material_key ).unwrap()
                 }
             };
@@ -358,7 +358,7 @@ impl Tester {
             let common_data = match common_voxel_dataset.get( &common_voxel_dataset_key ) {
                 Some( common_data ) => common_data,
                 None => {
-                    common_voxel_dataset.insert( common_voxel_dataset_key.clone(), Rc::new( CommonVoxelData { _color:color.clone(), _material:material.clone() } ) );
+                    common_voxel_dataset.insert( common_voxel_dataset_key.clone(), Arc::new( CommonVoxelData { color:color.clone(), material:material.clone() } ) );
                     common_voxel_dataset.get( &common_voxel_dataset_key ).unwrap()
                 }
             };
@@ -367,7 +367,7 @@ impl Tester {
             let voxel = match voxels.get( &voxel_key ) {
                 Some( voxel ) => voxel,
                 None => {
-                    voxels.insert( voxel_key.clone(), Rc::new( Voxel { _common_data:common_data.clone(), _individual_data:vec![ material_key ] } ) );
+                    voxels.insert( voxel_key.clone(), Arc::new( Voxel { _common_data:common_data.clone(), _individual_data:vec![ material_key ] } ) );
                     voxels.get( &voxel_key ).unwrap()
                 }
             };
@@ -381,15 +381,15 @@ impl Tester {
     }
 
     fn fill_with( from:(u32, u32, u32), to:(u32, u32, u32), world_holder:&mut dyn WorldHolding, setup:(String, Color) ) -> TestDataset {
-        let materials = HashMap::from([ (setup.0.clone(), Rc::new( Material { _density:100 } )) ]);
-        let colors = HashMap::from([ (setup.0.clone(), Rc::new( setup.1 )) ]);
+        let materials = HashMap::from([ (setup.0.clone(), Arc::new( Material { _density:100 } )) ]);
+        let colors = HashMap::from([ (setup.0.clone(), Arc::new( setup.1 )) ]);
 
-        let common_voxel_dataset = HashMap::from([ (setup.0.clone(), Rc::new( CommonVoxelData {
-            _material: materials.get( &setup.0 ).unwrap().clone(),
-            _color: colors.get( &setup.0 ).unwrap().clone(),
+        let common_voxel_dataset = HashMap::from([ (setup.0.clone(), Arc::new( CommonVoxelData {
+            material: materials.get( &setup.0 ).unwrap().clone(),
+            color: colors.get( &setup.0 ).unwrap().clone(),
         } ) ) ]);
 
-        let voxels = HashMap::from([ (setup.0.clone(), Rc::new( Voxel {
+        let voxels = HashMap::from([ (setup.0.clone(), Arc::new( Voxel {
             _common_data: common_voxel_dataset.get( &setup.0 ).unwrap().clone(),
             _individual_data: vec![],
         }) ) ]);
@@ -419,15 +419,15 @@ impl Tester {
         dataset.expand( dataset_bedrock );
 
         println!( "Filling deposits..." );
-        dataset.colors.insert( coal_key.clone(), Rc::new( coal_color ) );
-        dataset.materials.insert( coal_key.clone(), Rc::new( Material { _density:125 } ) );
+        dataset.colors.insert( coal_key.clone(), Arc::new( coal_color ) );
+        dataset.materials.insert( coal_key.clone(), Arc::new( Material { _density:125 } ) );
 
-        dataset.common_voxel_dataset.insert( coal_key.clone(), Rc::new( CommonVoxelData {
-            _color: dataset.colors.get( &coal_key ).unwrap().clone(),
-            _material: dataset.materials.get( &coal_key ).unwrap().clone()
+        dataset.common_voxel_dataset.insert( coal_key.clone(), Arc::new( CommonVoxelData {
+            color: dataset.colors.get( &coal_key ).unwrap().clone(),
+            material: dataset.materials.get( &coal_key ).unwrap().clone()
         } ) );
 
-        dataset.voxels.insert( coal_key.clone(), Rc::new( Voxel {
+        dataset.voxels.insert( coal_key.clone(), Arc::new( Voxel {
             _common_data: dataset.common_voxel_dataset.get( &coal_key ).unwrap().clone(),
             _individual_data:vec![]
         } ) );
@@ -470,7 +470,7 @@ impl Tester {
             ("z", Box::new( |n| Color { red:0, green:0, blue:(255 / (axies_length + 1)) * (n + 2) } ), Box::new( |n| (0, 0, n - axies_length as i32 / 2) )),
         ];
 
-        dataset.materials.insert( axies_key.clone(), Rc::new( Material { _density:1000 } ) );
+        dataset.materials.insert( axies_key.clone(), Arc::new( Material { _density:1000 } ) );
 
         if WORLD_X > 15 {
             for axis in axies_makers {
@@ -479,14 +479,14 @@ impl Tester {
                 for n in 0..axies_length {
                     let coords = axis.2( n as i32 );
 
-                    dataset.colors.insert( key.clone(), Rc::new( axis.1( n ) ) );
+                    dataset.colors.insert( key.clone(), Arc::new( axis.1( n ) ) );
 
-                    dataset.common_voxel_dataset.insert( key.clone(), Rc::new( CommonVoxelData {
-                        _color: dataset.colors.get( &key ).unwrap().clone(),
-                        _material: dataset.materials.get( &axies_key ).unwrap().clone()
+                    dataset.common_voxel_dataset.insert( key.clone(), Arc::new( CommonVoxelData {
+                        color: dataset.colors.get( &key ).unwrap().clone(),
+                        material: dataset.materials.get( &axies_key ).unwrap().clone()
                     } ) );
 
-                    dataset.voxels.insert( key.clone(), Rc::new( Voxel {
+                    dataset.voxels.insert( key.clone(), Arc::new( Voxel {
                         _common_data: dataset.common_voxel_dataset.get( &key ).unwrap().clone(),
                         _individual_data:vec![]
                     } ) );

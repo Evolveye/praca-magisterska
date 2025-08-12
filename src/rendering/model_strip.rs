@@ -122,7 +122,8 @@ impl<TVertex> ModelStrip<TVertex> {
 
   pub unsafe fn update_instance_buffer<T>( &mut self, renderer:&Renderer, instances_data:Vec<T> ) -> Result<()> {
       let Renderer { ref instance, ref device, ref data, .. } = renderer;
-      let size = (size_of::<T>() * instances_data.len() as usize) as u64;
+      let size = instances_data.len();
+      let size = (size_of::<T>() * if size == 0 { 1 } else { size } as usize) as u64;
 
       if size > self.instance_buffer_capacity {
           if self.instance_buffer_capacity != 0 {
@@ -160,9 +161,10 @@ impl<TVertex> ModelStrip<TVertex> {
           self.instance_staging_buffer = staging_buffer;
           self.instance_staging_buffer_memory = staging_buffer_memory;
           self.instance_staging_mapped_memory = device.map_memory( self.instance_staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
-          self.instance_buffer_capacity = size;
 
-          println!( "Model instances buffer has been expaded" );
+          // println!( "Model instances buffer has been expaded ({} -> {})", self.instance_buffer_capacity, size );
+
+          self.instance_buffer_capacity = size;
       }
 
       memcpy( instances_data.as_ptr(), self.instance_staging_mapped_memory.cast(), instances_data.len() as usize );

@@ -30,7 +30,6 @@ impl WorldRenderer {
 
     pub fn update_instances_buffer( &mut self, renderer:&Renderer, world:&World ) {
         let renderables = world.get_renderables();
-        debug_assert!( renderables.len() > 0, "Renderables count cannot be 0!" );
         unsafe{ self.model.update_instances_buffer( renderer, renderables ).unwrap() };
     }
 }

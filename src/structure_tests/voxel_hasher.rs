@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::hash::{ Hash, Hasher };
 use std::mem::{ size_of, size_of_val };
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::world::world_chunk::ChunkBitmask;
 use crate::world::world_holder::{Voxel, VoxelSide, WorldHolding};
@@ -25,7 +25,7 @@ impl Hash for Position {
 
 #[derive(Debug)]
 pub struct VoxelHashMap<T> {
-    voxels: HashMap<Position, Rc<T>>,
+    voxels: HashMap<Position, Arc<T>>,
 }
 
 #[allow(dead_code)]
@@ -44,7 +44,7 @@ impl<T> VoxelHashMap<T> {
 }
 
 impl WorldHolding for VoxelHashMap<Voxel> {
-    fn get_voxel(&self, x:u32, y:u32, z:u32) -> Option<Rc<Voxel>> {
+    fn get_voxel(&self, x:u32, y:u32, z:u32) -> Option<Arc<Voxel>> {
         let pos = Position { x, y, z };
 
         if let Some( data ) = self.voxels.get( &pos ) {
@@ -54,7 +54,7 @@ impl WorldHolding for VoxelHashMap<Voxel> {
         }
     }
 
-    fn get_all_voxels( &self ) -> Vec<(u32, u32, u32, Rc<Voxel>)> {
+    fn get_all_voxels( &self ) -> Vec<(u32, u32, u32, Arc<Voxel>)> {
         todo!()
     }
 
@@ -66,7 +66,7 @@ impl WorldHolding for VoxelHashMap<Voxel> {
         todo!()
     }
 
-    fn set_voxel( &mut self, x:u32, y:u32, z:u32, voxel:Option<Rc<Voxel>> ) {
+    fn set_voxel( &mut self, x:u32, y:u32, z:u32, voxel:Option<Arc<Voxel>> ) {
         let pos = Position { x, y, z };
 
         if let Some( voxel ) = voxel {
@@ -76,7 +76,7 @@ impl WorldHolding for VoxelHashMap<Voxel> {
         }
     }
 
-    fn fill_voxels( &mut self, from:(u32, u32, u32), to:(u32, u32, u32), voxel:Option<Rc<Voxel>> ) {
+    fn fill_voxels( &mut self, from:(u32, u32, u32), to:(u32, u32, u32), voxel:Option<Arc<Voxel>> ) {
         let (from_x, from_y, from_z) = from;
         let (to_x, to_y, to_z) = to;
 
@@ -113,7 +113,7 @@ impl WorldHolding for VoxelHashMap<Voxel> {
         let its_size = size_of::<Self>();
         println!( " - its size = {}", its_size );
 
-        let voxel_size = size_of::<Rc<Voxel>>();
+        let voxel_size = size_of::<Arc<Voxel>>();
         println!( " - voxel size = {}", voxel_size );
 
         let stored_voxels = self.voxels.iter().len();

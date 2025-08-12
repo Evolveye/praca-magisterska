@@ -1,16 +1,19 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{
+    collections::HashMap, rc::Rc,
+    sync::{ Arc }
+};
 
 use cgmath::Vector3;
 
-use crate::{rendering::vertex::Vec3, world::world_chunk::ChunkBitmask};
+use crate::{ rendering::vertex::Vec3, world::world_chunk::ChunkBitmask };
 
 pub type Coordinate = u32;
 
 pub struct VoxelDataset {
-    pub materials: HashMap<String, Rc<Material>>,
-    pub colors: HashMap<String, Rc<Color>>,
-    pub common_voxel_dataset: HashMap<String, Rc<CommonVoxelData>>,
-    pub voxels: HashMap<String, Rc<Voxel>>,
+    pub materials: HashMap<String, Arc<Material>>,
+    pub colors: HashMap<String, Arc<Color>>,
+    pub common_voxel_dataset: HashMap<String, Arc<CommonVoxelData>>,
+    pub voxels: HashMap<String, Arc<Voxel>>,
 }
 
 #[allow(dead_code)]
@@ -79,15 +82,16 @@ pub struct Color {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct CommonVoxelData {
-    pub _material: Rc<Material>,
-    pub _color: Rc<Color>,
+    pub material: Arc<Material>,
+    pub color: Arc<Color>,
 }
 
 #[derive(Debug)]
 pub struct Voxel {
     pub _individual_data: Vec<String>,
-    pub _common_data: Rc<CommonVoxelData>,
+    pub _common_data: Arc<CommonVoxelData>,
 }
 
 #[repr(C)]
@@ -104,11 +108,11 @@ impl VoxelSide {
         Self { pos, color, direction }
     }
 
-    pub fn from_voxel_rc( x:i64, y:i64, z:i64, direction:u8, voxel:&Rc<Voxel> ) -> Self {
+    pub fn from_voxel_rc( x:i64, y:i64, z:i64, direction:u8, voxel:&Arc<Voxel> ) -> Self {
         Self {
             pos: Vector3::new( x as f32, y as f32, z as f32 ),
             direction,
-            color: (*voxel._common_data._color).clone(),
+            color: (*voxel._common_data.color).clone(),
         }
     }
 
@@ -127,12 +131,12 @@ impl VoxelSide {
 
 #[allow(dead_code)]
 pub trait WorldHolding {
-    fn get_voxel( &self, x:Coordinate, y:Coordinate, z:Coordinate ) -> Option<Rc<Voxel>>;
-    fn get_all_voxels( &self ) -> Vec<(u32, u32, u32, Rc<Voxel>)>;
+    fn get_voxel( &self, x:Coordinate, y:Coordinate, z:Coordinate ) -> Option<Arc<Voxel>>;
+    fn get_all_voxels( &self ) -> Vec<(u32, u32, u32, Arc<Voxel>)>;
     fn get_all_visible_voxels_from( &self, from:(Coordinate, Coordinate, Coordinate) ) -> Vec<VoxelSide>;
 
-    fn set_voxel( &mut self, x:Coordinate, y:Coordinate, z:Coordinate, voxel:Option<Rc<Voxel>> );
-    fn fill_voxels( &mut self, from:(Coordinate, Coordinate, Coordinate), to:(Coordinate, Coordinate, Coordinate), voxel:Option<Rc<Voxel>> );
+    fn set_voxel( &mut self, x:Coordinate, y:Coordinate, z:Coordinate, voxel:Option<Arc<Voxel>> );
+    fn fill_voxels( &mut self, from:(Coordinate, Coordinate, Coordinate), to:(Coordinate, Coordinate, Coordinate), voxel:Option<Arc<Voxel>> );
 
     fn to_bitmask( &self ) -> ChunkBitmask;
     fn get_size( &self );
@@ -148,15 +152,15 @@ pub trait WorldHolding {
 
 #[allow(dead_code)]
 pub fn fill_with( from:(u32, u32, u32), to:(u32, u32, u32), world_holder:&mut dyn WorldHolding, setup:(&str, Color) ) -> VoxelDataset {
-    let materials = HashMap::from([ (setup.0.to_string(), Rc::new( Material { _density:100 } )) ]);
-    let colors = HashMap::from([ (setup.0.to_string(), Rc::new( setup.1 )) ]);
+    let materials = HashMap::from([ (setup.0.to_string(), Arc::new( Material { _density:100 } )) ]);
+    let colors = HashMap::from([ (setup.0.to_string(), Arc::new( setup.1 )) ]);
 
-    let common_voxel_dataset = HashMap::from([ (setup.0.to_string(), Rc::new( CommonVoxelData {
-        _material: materials.get( setup.0 ).unwrap().clone(),
-        _color: colors.get( setup.0 ).unwrap().clone(),
+    let common_voxel_dataset = HashMap::from([ (setup.0.to_string(), Arc::new( CommonVoxelData {
+        material: materials.get( setup.0 ).unwrap().clone(),
+        color: colors.get( setup.0 ).unwrap().clone(),
     } ) ) ]);
 
-    let voxels = HashMap::from([ (setup.0.to_string(), Rc::new( Voxel {
+    let voxels = HashMap::from([ (setup.0.to_string(), Arc::new( Voxel {
         _common_data: common_voxel_dataset.get( setup.0 ).unwrap().clone(),
         _individual_data: vec![],
     }) ) ]);
