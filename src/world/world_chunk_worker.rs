@@ -327,7 +327,6 @@ fn remesh_chunks( chunks_dataset:&Arc<ChunksDataset>, center_chunk_position:Grid
         }
     }
 
-    thread::sleep( Duration::from_secs( 5 ) );
     // println!( "remesh_chunks end" );
 
     // println!( "{:?}", chunks.values().map( |c| format!( "{:?}", c.read().unwrap().state ) ).collect::<Vec<_>>() );
