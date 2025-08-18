@@ -81,10 +81,10 @@ impl WorldChunk {
                 let index = CHUNK_SIZE_X2 * axis + i;
                 let column = structure.solids_mask.data[ index ];
 
-                let Some( ref neighbour_a_shift ) = axies_neighbours[ axis ].0.structure else { panic!( "Neighbours of remeshed chunk must have terrain" ) };
+                let Some( ref neighbour_a_shift ) = axies_neighbours[ axis ].0.structure else { panic!( "Neighbours of remeshed chunk must have terrain (state={:?}", axies_neighbours[ axis ].0.state ) };
                 let neighbour_a_shift = (neighbour_a_shift.solids_mask.data[ index ] & 1) << neighbour_shift;
 
-                let Some( ref neighbour_b_shift ) = axies_neighbours[ axis ].1.structure else { panic!( "Neighbours of remeshed chunk must have terrain" ) };
+                let Some( ref neighbour_b_shift ) = axies_neighbours[ axis ].1.structure else { panic!( "Neighbours of remeshed chunk must have terrain (state={:?}", axies_neighbours[ axis ].1.state ) };
                 let neighbour_b_shift = (neighbour_b_shift.solids_mask.data[ index ] >> neighbour_shift) & 1;
 
                 col_face_masks[ CHUNK_SIZE_X2 * (axis * 2    ) + i ] = column & !(column << 1 | neighbour_b_shift);

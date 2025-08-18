@@ -1,17 +1,27 @@
 use std::{
-    collections::HashMap, sync::{ mpsc,Arc, RwLock }, thread, vec
+    collections::{HashMap, VecDeque}, sync::{ atomic::AtomicU64, mpsc, Arc, Condvar, Mutex, RwLock }, thread, time::Duration, vec
 };
 
-use crate::world::{chunk_region_iterator::ChunkRegionIterator, world::{ GridPosition, Position, CHUNK_SIZE as CHUNK_SIZE_USIZE }, world_chunk::{WorldChunk, WorldChunkState}, world_generator::WorldGenerative, world_holder::VoxelDataset};
+use crate::world::{chunk_region_iterator::ChunkRegionIterator, world::{ ChunkLoaderId, GridPosition, CHUNK_SIZE as CHUNK_SIZE_USIZE }, world_chunk::{WorldChunk, WorldChunkState}, world_generator::WorldGenerative, world_holder::VoxelDataset};
 
 const CHUNK_SIZE:i64 = CHUNK_SIZE_USIZE as i64;
+
+static NEXT_CMD_GROUP_ID:AtomicU64 = AtomicU64::new(1);
+
+#[derive(Hash, PartialEq, Eq, Clone)]
+pub struct GroupId(u64);
+
+impl GroupId {
+    pub fn new() -> Self {
+        GroupId( NEXT_CMD_GROUP_ID.fetch_add( 1, std::sync::atomic::Ordering::Relaxed ) )
+    }
+}
 
 type WorldChunkCoord = i64;
 
 pub struct ChunksDataset {
     pub chunks: RwLock<HashMap<(WorldChunkCoord, WorldChunkCoord, WorldChunkCoord), RwLock<WorldChunk>>>,
     pub default_generator: Box<dyn WorldGenerative>,
-    pub worker_tasks: Vec<ChunkCmd>,
 }
 
 impl ChunksDataset {
@@ -19,51 +29,82 @@ impl ChunksDataset {
         Self {
             chunks: RwLock::new( HashMap::new() ),
             default_generator,
-            worker_tasks: vec![],
         }
     }
 }
 
 #[allow(dead_code)]
 pub enum ChunkCmd {
-    GenerateChunks( GridPosition, u8 ),
-    EnsureChunks( GridPosition, u8 ),
-    FillChunks( GridPosition, u8 ),
-    UpdateChunkLoaderChunks( Position, Position, u8 ),
+    EnsureChunks( GroupId, GridPosition, u32, u32 ),
+    GenerateChunks( GroupId, GridPosition, u32, u32 ),
+    MultithreadedRemeshChunks( GridPosition, u32, u32 ),
+    RemeshChunks( GridPosition, u8 ),
+    UpdateChunkLoaderChunks( ChunkLoaderId, u8, GridPosition, GridPosition ),
 }
 
 #[allow(dead_code)]
 pub enum ChunkRes {
-    ChunksStateUpdate( Vec<GridPosition>, Vec<GridPosition> ),
-    NewChunks( Vec<(GridPosition, RwLock<WorldChunk>)>, GridPosition, u8 ),
+    ChunksEnsured( Vec<((i64, i64, i64), RwLock<WorldChunk>)>, GroupId, GridPosition, u32, u32 ),
+    ChunksStateUpdate( ChunkLoaderId, Vec<GridPosition>, Vec<GridPosition> ),
+    ChunksGenerated( GroupId ),
 }
 
-pub fn start_chunk_worker( chunks_dataset:&Arc<ChunksDataset>, rx:mpsc::Receiver<ChunkCmd>, tx:mpsc::Sender<ChunkRes> ) {
+pub fn start_chunk_worker( worker_id:u8, chunks_dataset:&Arc<ChunksDataset>, tasks_lock:&Arc<(Mutex<VecDeque<ChunkCmd>>,Condvar)>, tx:mpsc::Sender<ChunkRes> ) {
+    let name = format!( "chunk-worker-{worker_id}" );
+
     thread::Builder::new()
-        .name( "chunk-processor".into() )
+        .name( name.clone() )
         .spawn( {
             let chunks_dataset = Arc::clone( chunks_dataset );
+            let tasks_lock = Arc::clone( tasks_lock );
 
             move || {
-                while let Ok( cmd ) = rx.recv() {
+                println!( "Worker \"{name}\" has been started" );
+                let (lock, cvar) = &*tasks_lock;
+
+                loop {
+                    // print!( "Iteration start" );
+
+                    let mut tasks = cvar
+                        .wait_while( lock.lock().unwrap(), |t| t.is_empty() )
+                        .unwrap();
+
+                    // println!( " | tasks.len={}", tasks.len() );
+                    let task = tasks.pop_front().unwrap();
+                    drop( tasks );
+
+                    // let task = cvar
+                    //     .wait_while( lock.lock().unwrap(), |t| t.is_empty() )
+                    //     .unwrap()
+                    //     .pop_front()
+                    //     .unwrap();
+
                     // main            gen          main
                     // EnsureChunks -> NewChunks -> FillChunks
 
                     // main                       gen
                     // UpdateChunkLoaderChunks -> ChunksStateUpdate
 
-                    match cmd {
-                        ChunkCmd::GenerateChunks( position, render_distance ) => {
-                            generate_chunks( position, 0 );
-                        }
-                        ChunkCmd::EnsureChunks( position, render_distance ) => {
-                            create_missing_chunks( &tx, &chunks_dataset, position, render_distance as i64 );
+
+                    match task {
+                        ChunkCmd::EnsureChunks( id, position, index_from, count ) => {
+                            let index_to = index_from + count;
+                            let new_chunks = get_nonexistant_chunks( &chunks_dataset, position, index_from, index_to );
+                            let _ = tx.send( ChunkRes::ChunksEnsured( new_chunks, id, position, index_from, index_to ) );
                         },
-                        ChunkCmd::FillChunks( position, render_distance ) => {
-                            generate_chunk_filling( &chunks_dataset, position, render_distance as i64 );
+                        ChunkCmd::GenerateChunks( id, position, index_from, index_to ) => {
+                            generate_chunks( &chunks_dataset, position, index_from, index_to );
+                            let _ = tx.send( ChunkRes::ChunksGenerated( id ) );
                         }
-                        ChunkCmd::UpdateChunkLoaderChunks( position, move_to, render_distance ) => {
-                            update_chunk_loader_chunks( &tx, &chunks_dataset, position, move_to, render_distance );
+                        ChunkCmd::RemeshChunks( position, render_distance ) => {
+                            remesh_chunks( &chunks_dataset, position, render_distance );
+                        }
+                        ChunkCmd::MultithreadedRemeshChunks( position, index_from, count ) => {
+                            let index_to = index_from + count;
+                            multithreaded_remesh_chunks( &chunks_dataset, position, index_from, index_to );
+                        }
+                        ChunkCmd::UpdateChunkLoaderChunks( loader_id, render_distance, new_pos, shift ) => {
+                            update_chunk_loader_chunks( &tx, loader_id, render_distance, new_pos, shift );
                         }
                     }
                 }
@@ -72,68 +113,75 @@ pub fn start_chunk_worker( chunks_dataset:&Arc<ChunksDataset>, rx:mpsc::Receiver
         .expect( "Failed to spawn thread" );
 }
 
-fn generate_chunks( position:GridPosition, from:usize ) {
-    let mut cube_layer_iter = ChunkRegionIterator::with_range( 0..100 );
-    let mut i = 0;
+fn generate_chunks( chunks_dataset:&Arc<ChunksDataset>, position:GridPosition, index_from:u32, index_to:u32 ) {
+    // println!( "generate_chunks" );
 
+    let mut cube_layer_iter = ChunkRegionIterator::with_range( index_from..index_to );
+    let mut dataset = VoxelDataset::new();
+    let mut chunks_pos_to_generate = vec![];
+
+
+    // Collecting chunks to generate
+    let chunks = chunks_dataset.chunks.read().unwrap();
     loop {
-        let Some( next ) = cube_layer_iter.next() else { break };
-        println!( "{i: >2} | side={}, {:?}", cube_layer_iter.side, next );
+        let Some( relative_pos ) = cube_layer_iter.next() else { break };
+        let chunk_pos = (
+            position.0 + relative_pos.0 as i64,
+            position.1 + relative_pos.1 as i64,
+            position.2 + relative_pos.2 as i64
+        );
 
-        if i > 30 { break }
-        i += 1;
+        if let Some( chunk_lock ) = chunks.get( &chunk_pos ) {
+            if matches!( chunk_lock.read().unwrap().state, WorldChunkState::Empty ) {
+                // println!( "index_from={index_from} {: >2?} | side={}, {:?}", cube_layer_iter.iterations, cube_layer_iter.side, relative_pos );
+                chunks_pos_to_generate.push( chunk_pos );
+            }
+        }
+    }
+    drop( chunks );
+
+    // Generating the chunks
+    // println!( "Generating the chunks" );
+    for pos in chunks_pos_to_generate {
+        let chunk_data = chunks_dataset.default_generator.generate_chunk( &mut dataset, pos, CHUNK_SIZE as u8 );
+        let chunks = chunks_dataset.chunks.read().unwrap();
+        let Some( chunk ) = chunks.get( &pos ) else { continue };
+        let mut chunk = chunk.write().unwrap();
+
+        if matches!( chunk.state, WorldChunkState::Empty ) {
+            chunk.set_data( chunk_data );
+        }
     }
 }
 
-fn iterate_throught_cube_layer( layer:u8 ) {
-
-}
-
-fn update_chunk_loader_chunks( tx:&mpsc::Sender<ChunkRes>, chunks_dataset:&Arc<ChunksDataset>, position:Position, move_to:Position, render_distance:u8 ) {
+fn update_chunk_loader_chunks( tx:&mpsc::Sender<ChunkRes>, loader_id:ChunkLoaderId, render_distance:u8, position:GridPosition, shift:GridPosition ) {
     let render_distance = render_distance as i64;
-    let loader_chunk_x = (position.0 as i64).div_euclid( CHUNK_SIZE );
-    let loader_chunk_y = (position.1 as i64).div_euclid( CHUNK_SIZE );
-    let loader_chunk_z = (position.2 as i64).div_euclid( CHUNK_SIZE );
 
-    let move_to_chunk_x = (move_to.0 as i64).div_euclid( CHUNK_SIZE );
-    let move_to_chunk_y = (move_to.1 as i64).div_euclid( CHUNK_SIZE );
-    let move_to_chunk_z = (move_to.2 as i64).div_euclid( CHUNK_SIZE );
+    let render_distance_addition_surrounding_x = shift.0.signum() * (render_distance + 1);
+    let render_distance_addition_surrounding_y = shift.1.signum() * (render_distance + 1);
+    let render_distance_addition_surrounding_z = shift.2.signum() * (render_distance + 1);
 
-    let shift_x = move_to_chunk_x - loader_chunk_x;
-    let shift_y = move_to_chunk_y - loader_chunk_y;
-    let shift_z = move_to_chunk_z - loader_chunk_z;
+    let render_distance_addition_rendering_x = shift.0.signum() * render_distance;
+    let render_distance_addition_rendering_y = shift.1.signum() * render_distance;
+    let render_distance_addition_rendering_z = shift.2.signum() * render_distance;
 
-    if shift_x | shift_y | shift_z == 0 {
-        return
-    }
+    let from_s_x = position.0 - render_distance_addition_surrounding_x;
+    let from_s_y = position.1 - render_distance_addition_surrounding_y;
+    let from_s_z = position.2 - render_distance_addition_surrounding_z;
 
-    let move_to_chunk = (move_to_chunk_x, move_to_chunk_y, move_to_chunk_z);
-    // println!( "gen: New chunk {move_to_chunk:?}" );
-
-    let render_distance_addition_surrounding_x = shift_x.signum() * (render_distance + 1);
-    let render_distance_addition_surrounding_y = shift_y.signum() * (render_distance + 1);
-    let render_distance_addition_surrounding_z = shift_z.signum() * (render_distance + 1);
-
-    let render_distance_addition_rendering_x = shift_x.signum() * render_distance;
-    let render_distance_addition_rendering_y = shift_y.signum() * render_distance;
-    let render_distance_addition_rendering_z = shift_z.signum() * render_distance;
-
-    let from_s_x = loader_chunk_x - render_distance_addition_surrounding_x;
-    let from_s_y = loader_chunk_y - render_distance_addition_surrounding_y;
-    let from_s_z = loader_chunk_z - render_distance_addition_surrounding_z;
-
-    let from_r_x = loader_chunk_x - render_distance_addition_rendering_x;
-    let from_r_y = loader_chunk_y - render_distance_addition_rendering_y;
-    let from_r_z = loader_chunk_z - render_distance_addition_rendering_z;
+    let from_r_x = position.0 - render_distance_addition_rendering_x;
+    let from_r_y = position.1 - render_distance_addition_rendering_y;
+    let from_r_z = position.2 - render_distance_addition_rendering_z;
 
     let mut update_coords = (vec![], vec![]);
 
-    axis_processor( &mut update_coords, from_s_x, from_r_x, shift_x, loader_chunk_y, loader_chunk_z, render_distance, &|a, b, c| (a, b, c) );
-    axis_processor( &mut update_coords, from_s_y, from_r_y, shift_y, loader_chunk_x, loader_chunk_z, render_distance, &|a, b, c| (b, a, c) );
-    axis_processor( &mut update_coords, from_s_z, from_r_z, shift_z, loader_chunk_x, loader_chunk_y, render_distance, &|a, b, c| (b, c, a) );
+    // println!( "position={position:?}, shift={shift:?}" );
 
-    let _ = tx.send( ChunkRes::ChunksStateUpdate( update_coords.0, update_coords.1 ) );
-    create_missing_chunks( &tx, &chunks_dataset, move_to_chunk, render_distance );
+    axis_processor( &mut update_coords, from_s_x, from_r_x, shift.0, position.1, position.2, render_distance, &|a, b, c| (a, b, c) );
+    axis_processor( &mut update_coords, from_s_y, from_r_y, shift.1, position.0, position.2, render_distance, &|a, b, c| (b, a, c) );
+    axis_processor( &mut update_coords, from_s_z, from_r_z, shift.2, position.0, position.1, render_distance, &|a, b, c| (b, c, a) );
+
+    let _ = tx.send( ChunkRes::ChunksStateUpdate( loader_id, update_coords.0, update_coords.1 ) );
 }
 
 fn axis_processor(
@@ -171,61 +219,83 @@ fn axis_processor(
     }
 }
 
-fn create_missing_chunks( tx:&mpsc::Sender<ChunkRes>, chunks_dataset:&Arc<ChunksDataset>, center_chunk_position:GridPosition, render_distance:i64 ) {
-    let enlarged_render_dist = render_distance + 1;
+fn get_nonexistant_chunks( chunks_dataset:&Arc<ChunksDataset>, position:GridPosition, index_from:u32, index_to:u32 ) -> Vec<(GridPosition, RwLock<WorldChunk>)> {
+    // println!( "get_nonexistant_chunks" );
+
     let mut new_chunks = vec![];
     let chunks = chunks_dataset.chunks.read().unwrap();
+    let mut cube_layer_iter = ChunkRegionIterator::with_range( index_from..index_to );
 
-    for y in -enlarged_render_dist..=enlarged_render_dist {
-        for x in -enlarged_render_dist..=enlarged_render_dist {
-            for z in -enlarged_render_dist..=enlarged_render_dist {
-                let chunk_pos = (center_chunk_position.0 + x, center_chunk_position.1 + y, center_chunk_position.2 + z);
+    loop {
+        let Some( relative_pos ) = cube_layer_iter.next() else { break };
+        let chunk_pos = (
+            position.0 + relative_pos.0 as i64,
+            position.1 + relative_pos.1 as i64,
+            position.2 + relative_pos.2 as i64
+        );
 
-                if !chunks.contains_key( &chunk_pos ) {
-                    new_chunks.push( (chunk_pos, RwLock::new( WorldChunk::new() )) );
-                }
-            }
+        if !chunks.contains_key( &chunk_pos ) {
+            new_chunks.push( (chunk_pos, RwLock::new( WorldChunk::new() )) );
         }
     }
 
-    let _ = tx.send( ChunkRes::NewChunks( new_chunks, center_chunk_position, render_distance as u8 ) );
+    new_chunks
 }
 
-fn generate_chunk_filling( chunks_dataset:&Arc<ChunksDataset>, center_chunk_position:GridPosition, render_distance:i64 ) {
-    let enlarged_render_dist = render_distance + 1;
-    let mut dataset = VoxelDataset::new();
-    let mut chunks_pos_to_generate = vec![];
+fn multithreaded_remesh_chunks( chunks_dataset:&Arc<ChunksDataset>, center_chunk_position:GridPosition, index_from:u32, index_to:u32 ) {
+    // println!( "remesh_chunks" );
 
-    // Collecting chunks to generate
+    let mut cube_layer_iter = ChunkRegionIterator::with_range( index_from..index_to );
     let chunks = chunks_dataset.chunks.read().unwrap();
-    for y in -enlarged_render_dist..=enlarged_render_dist {
-        for x in -enlarged_render_dist..=enlarged_render_dist {
-            for z in -enlarged_render_dist..=enlarged_render_dist {
-                let chunk_pos = (center_chunk_position.0 + x, center_chunk_position.1 + y, center_chunk_position.2 + z);
 
-                if let Some( chunk_lock ) = chunks.get( &chunk_pos ) {
-                    if matches!( chunk_lock.read().unwrap().state, WorldChunkState::Empty ) {
-                        chunks_pos_to_generate.push( chunk_pos );
+    'chunks: loop {
+        let Some( relative_pos ) = cube_layer_iter.next() else { break };
+        let chunk_pos = (
+            center_chunk_position.0 + relative_pos.0 as i64,
+            center_chunk_position.1 + relative_pos.1 as i64,
+            center_chunk_position.2 + relative_pos.2 as i64
+        );
+
+        // println!( "index_from={index_from} {: >2?} | side={}, {:?}", cube_layer_iter.iterations, cube_layer_iter.side, relative_pos );
+
+        let Some( chunk ) = chunks.get( &chunk_pos ) else {
+            println!( "Chunk not exists ({chunk_pos:?})" );
+            continue
+        };
+
+        let mut chunk = chunk.write().unwrap();
+        if !matches!( chunk.state, WorldChunkState::Dirty ) { continue }
+
+        let mut neighbours = vec![];
+
+        for dy in -1..=1 {
+            for dz in -1..=1 {
+                for dx in -1..=1 {
+                    if dx != 0 || dy != 0 || dz != 0 {
+                        let Some( chunk ) = chunks.get( &(chunk_pos.0 + dx, chunk_pos.1 + dy, chunk_pos.2 + dz) ) else { continue 'chunks };
+                        let chunk = chunk.read().unwrap();
+                        if matches!( chunk.state, WorldChunkState::Empty ) { continue 'chunks }
+
+                        neighbours.push( chunk );
                     }
                 }
             }
         }
-    }
-    drop( chunks );
 
-    // Generating the chunks
-    for pos in chunks_pos_to_generate {
-        let chunk_data = chunks_dataset.default_generator.generate_chunk( &mut dataset, pos, CHUNK_SIZE as u8 );
-        let chunks = chunks_dataset.chunks.read().unwrap();
-        let Some( chunk ) = chunks.get( &pos ) else { continue };
-        let mut chunk = chunk.write().unwrap();
-
-        if matches!( chunk.state, WorldChunkState::Empty ) {
-            chunk.set_data( chunk_data );
-        }
+        // println!( "Remesihng {chunk_pos:?}" );
+        chunk.remesh( chunk_pos, neighbours );
     }
+
+    // println!( "{:?}", chunks.values().map( |c| format!( "{:?}", c.read().unwrap().state ) ).collect::<Vec<_>>() );
+    // dbg!( chunks.values().map( |c| c.read().unwrap().state ).collect::<Vec<_>>() );
+}
+
+
+fn remesh_chunks( chunks_dataset:&Arc<ChunksDataset>, center_chunk_position:GridPosition, render_distance:u8 ) {
+    // println!( "remesh_chunks start" );
 
     // Chunks meshing
+    let render_distance = render_distance as i64;
     let chunks = chunks_dataset.chunks.read().unwrap();
     for y in -render_distance..=render_distance {
         for x in -render_distance..=render_distance {
@@ -233,7 +303,8 @@ fn generate_chunk_filling( chunks_dataset:&Arc<ChunksDataset>, center_chunk_posi
                 let chunk_pos = (center_chunk_position.0 + x, center_chunk_position.1 + y, center_chunk_position.2 + z);
                 let Some( chunk ) = chunks.get( &chunk_pos ) else { continue };
                 let mut chunk = chunk.write().unwrap();
-                if matches!( chunk.state, WorldChunkState::Meshed | WorldChunkState::Stashing ) { continue }
+                // if matches!( chunk.state, WorldChunkState::Meshed | WorldChunkState::Stashing ) { continue }
+                if !matches!( chunk.state, WorldChunkState::Dirty ) { continue }
 
                 let mut neighbours = vec![];
 
@@ -242,7 +313,10 @@ fn generate_chunk_filling( chunks_dataset:&Arc<ChunksDataset>, center_chunk_posi
                         for dx in -1..=1 {
                             if dx != 0 || dy != 0 || dz != 0 {
                                 let Some( chunk ) = chunks.get( &(chunk_pos.0 + dx, chunk_pos.1 + dy, chunk_pos.2 + dz) ) else { continue 'chunks };
-                                neighbours.push( chunk.read().unwrap() );
+                                let chunk = chunk.read().unwrap();
+                                if matches!( chunk.state, WorldChunkState::Empty ) { continue 'chunks }
+
+                                neighbours.push( chunk );
                             }
                         }
                     }
@@ -252,4 +326,10 @@ fn generate_chunk_filling( chunks_dataset:&Arc<ChunksDataset>, center_chunk_posi
             }
         }
     }
+
+    thread::sleep( Duration::from_secs( 5 ) );
+    // println!( "remesh_chunks end" );
+
+    // println!( "{:?}", chunks.values().map( |c| format!( "{:?}", c.read().unwrap().state ) ).collect::<Vec<_>>() );
+    // dbg!( chunks.values().map( |c| c.read().unwrap().state ).collect::<Vec<_>>() );
 }
