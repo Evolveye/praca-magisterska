@@ -6,7 +6,7 @@
 )]
 
 use anyhow::{ anyhow, Result };
-use cgmath::{ vec3, Deg };
+use cgmath::vec3;
 use log::*;
 use thiserror::Error;
 
@@ -27,6 +27,7 @@ use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
 use std::time::Instant;
 
+use crate::app::camera::Camera;
 use crate::app::window_manager::WindowManager;
 use crate::world::world_holder::Voxel;
 
@@ -278,7 +279,7 @@ impl Renderer {
 
 
 
-  pub unsafe fn render( &mut self, window_manager:&mut WindowManager, view_matrix:Mat4, models:Vec<&dyn Renderable> ) -> Result<()> {
+  pub unsafe fn render( &mut self, window_manager:&mut WindowManager, camera:&Camera, models:Vec<&dyn Renderable> ) -> Result<()> {
     self.device.wait_for_fences( &[ self.data.in_flight_fences[ self.frame ] ], true, u64::MAX )?;
 
     let result = self.device.acquire_next_image_khr(
@@ -301,7 +302,7 @@ impl Renderer {
     self.data.images_in_flight[ image_index ] = self.data.in_flight_fences[ self.frame ];
 
     self.update_command_buffer( image_index, models )?;
-    self.update_uniform_buffer( image_index, view_matrix )?;
+    self.update_uniform_buffer( image_index, camera )?;
 
     let wait_semaphores = &[ self.data.image_available_semaphores[ self.frame ] ];
     let wait_stages = &[ vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT ];
@@ -342,33 +343,8 @@ impl Renderer {
     Ok(())
   }
 
-  unsafe fn update_uniform_buffer( &mut self, image_index:usize, view_matrix:Mat4 ) -> Result<()> {
-    // let view = Mat4::look_at_rh(
-    //   point3( 0.0, 0.0, 6.0 ),
-    //   point3( 0.0, 0.0, 0.0 ),
-    //   vec3( 0.0, 1.0, 0.0 ),
-    // );
-
-    // self.control_manager.update_position_by_velocity();
-    // self.control_manager.update_target_position_by_mouse();
-
-    // let view = Mat4::look_at_rh( self.control_manager.position, self.control_manager.target_position, Vec3::unit_y() );
-
-    let correction = Mat4::new(
-      1.0,  0.0,       0.0, 0.0,
-      0.0, -1.0,       0.0, 0.0,
-      0.0,  0.0, 1.0 / 2.0, 0.0,
-      0.0,  0.0, 1.0 / 2.0, 1.0,
-    );
-
-    let proj = correction * cgmath::perspective(
-      Deg( 45.0 ),
-      self.data.swapchain_extent.width as f32 / self.data.swapchain_extent.height as f32,
-      0.1,
-      1000.0,
-    );
-
-    let ubo = UniformBufferObject { view:view_matrix, proj };
+  unsafe fn update_uniform_buffer( &mut self, image_index:usize, camera:&Camera ) -> Result<()> {
+    let ubo = UniformBufferObject { view:camera.view_matrix, proj:camera.proj_matrix };
 
     let memory = self.device.map_memory(
       self.data.uniform_buffers_memory[ image_index ],

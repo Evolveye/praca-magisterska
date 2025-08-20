@@ -6,7 +6,6 @@ use crate::{
         renderer::Renderer,
         vertex::{ Renderable, RendererModelDescriptions, Vec3 }
     },
-    world::world::World
 };
 use super::{
     voxel_vertices::{ VoxelVertex, VOXEL_SIDE_VERTICES },
@@ -28,8 +27,7 @@ impl WorldRenderer {
         }
     }
 
-    pub fn update_instances_buffer( &mut self, renderer:&Renderer, world:&World ) {
-        let renderables = world.get_renderables();
+    pub fn update_instances_buffer( &mut self, renderer:&Renderer, renderables:Vec<VoxelSide> ) {
         unsafe{ self.model.update_instances_buffer( renderer, renderables ).unwrap() };
     }
 }

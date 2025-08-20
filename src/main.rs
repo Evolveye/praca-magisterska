@@ -42,11 +42,10 @@ fn generate_img() {
 }
 
 #[allow(dead_code)]
-fn test_cube_with_side( layer:i32, mut cube:ChunkRegionIterator ) {
-    let mut max = ChunkRegionIterator::get_layer_size( layer ) as u32;
+fn test_cube_with_side( mut cube:ChunkRegionIterator ) {
     let mut last_side = cube.side;
+    let mut max = cube.iterations.unwrap() + 1;
 
-    max = cube.iterations.unwrap() + 1;
     println!( "Start ({max} iterations)\n - - -" );
 
     loop {

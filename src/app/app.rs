@@ -8,7 +8,7 @@ use winit::{
     keyboard::{ KeyCode, PhysicalKey }
 };
 use crate::{
-    app::{ control_manager::ControlManager, settings::AppSettings, window_manager::WindowManager },
+    app::{ camera::Camera, control_manager::ControlManager, settings::AppSettings, window_manager::WindowManager },
      rendering::renderer::Renderer,
      structure_tests::generate_world_as_world,
      world::{
@@ -18,17 +18,18 @@ use crate::{
 };
 
 pub struct App {
-  pub renderer: Renderer,
-  pub window_manager: WindowManager,
-  pub world_renderer: WorldRenderer,
-  pub world: World,
-  pub camera_chunk_loader: ChunkLoaderhandle,
-  pub settings: AppSettings,
-  pub control_manager: ControlManager,
+    pub window_manager: WindowManager,
+    pub control_manager: ControlManager,
+    pub camera: Camera,
+    pub renderer: Renderer,
+    pub world_renderer: WorldRenderer,
+    pub world: World,
+    pub camera_chunk_loader: ChunkLoaderhandle,
+    pub settings: AppSettings,
 
-  pub start_time: Instant,
-  pub last_tick_time: Instant,
-  pub fps_time: Instant,
+    pub start_time: Instant,
+    pub last_tick_time: Instant,
+    pub fps_time: Instant,
 }
 
 impl App {
@@ -37,6 +38,8 @@ impl App {
 
         let window_manager = WindowManager::new()?;
         let control_manager = ControlManager::new( point3( half_chunk_size, 15.0, half_chunk_size ), point3( half_chunk_size, 0.0, 0.0 ) );
+        let window_size = window_manager.window.inner_size();
+        let camera = Camera::new( control_manager.position, control_manager.rotation, window_size.width, window_size.height );
         let renderer = unsafe { Renderer::create( &window_manager.window )? };
         let world_renderer = WorldRenderer::new( &renderer );
         let settings = AppSettings::new();
@@ -44,11 +47,12 @@ impl App {
 
         Ok( App {
             window_manager,
+            control_manager,
+            camera,
             renderer,
             world_renderer,
             world,
             camera_chunk_loader,
-            control_manager,
             settings,
 
             start_time: Instant::now(),
@@ -74,8 +78,9 @@ impl App {
         self.world.update();
 
         self.control_manager.update( &self.settings, time_delta.as_secs_f32() );
+        self.camera.update_view( self.control_manager.position, self.control_manager.rotation );
 
-        self.world_renderer.update_instances_buffer( &self.renderer, &self.world );
+        self.world_renderer.update_instances_buffer( &self.renderer, self.world.get_renderables( &self.camera ) );
     }
 
     pub fn run_loop( &mut self ) {
@@ -95,8 +100,7 @@ impl App {
                         self.tick();
 
                         unsafe {
-                            let view_matrix = self.control_manager.get_view_matrix();
-                            self.renderer.render( &mut self.window_manager, view_matrix, vec![ &self.world_renderer ] ).unwrap();
+                            self.renderer.render( &mut self.window_manager, &self.camera, vec![ &self.world_renderer ] ).unwrap();
                         }
                     },
 

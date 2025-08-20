@@ -27,7 +27,7 @@ use crate::{structure_tests::tester_generators::GeneratorOfRealisticallyTerrain,
 pub fn generate_world_as_world() -> (World, ChunkLoaderhandle) {
     let world_generator = GeneratorOfRealisticallyTerrain::new( 50 );
     let mut world = World::new( Box::new( world_generator ) );
-    let chunk_loader = world.create_chunk_loader( (CHUNK_SIZE as f32 / 2.0, 20.0, CHUNK_SIZE as f32 / 2.0), 4 );
+    let chunk_loader = world.create_chunk_loader( (CHUNK_SIZE as f32 / 2.0, 20.0, CHUNK_SIZE as f32 / 2.0), 2 );
 
     (world, chunk_loader)
 }

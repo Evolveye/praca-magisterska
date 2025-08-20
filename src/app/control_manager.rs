@@ -1,13 +1,10 @@
 
 use std::time::{Duration, Instant};
 
-use cgmath::{ point2, vec2, vec3, InnerSpace, Point2, Point3, Vector3 };
+use cgmath::{ point2, vec2, InnerSpace, Point2, Point3, Vector3 };
 use winit::{event::{ElementState, DeviceEvent::{ self, MouseMotion }, KeyEvent}, keyboard::{KeyCode, PhysicalKey}};
 
 use crate::app::settings::AppSettings;
-
-type Vec3 = cgmath::Vector3<f32>;
-type Mat4 = cgmath::Matrix4<f32>;
 
 #[derive(Clone, Debug)]
 pub struct ControlManager {
@@ -83,18 +80,6 @@ impl ControlManager {
         self.position += right * (self.velocity_left - self.velocity_right) * settings.movement_speed * delta_time;
 
         self.position.y += (self.velocity_up - self.velocity_down) * settings.movement_speed * delta_time;
-    }
-
-    pub fn get_view_matrix( &self ) -> Mat4 {
-        Mat4::look_at_rh(
-            self.position,
-            self.position + vec3(
-                self.rotation.y.cos() * self.rotation.x.cos(),
-                self.rotation.x.sin(),
-                self.rotation.y.sin() * self.rotation.x.cos(),
-            ),
-            Vec3::unit_y(),
-        )
     }
 
     pub fn handle_keyboard_event( &mut self, settings:&AppSettings, event:KeyEvent ) {

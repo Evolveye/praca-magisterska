@@ -4,9 +4,9 @@ use std::{
     sync::{ self, mpsc, Arc, Condvar, Mutex, RwLock },
 };
 
-use crate::world::{
+use crate::{app::camera::Camera, world::{
     world_chunk::{ WorldChunk, WorldChunkState }, world_chunk_worker::{ start_chunk_worker, ChunkCmd, ChunkRes, ChunksDataset, GroupId }, world_generator::WorldGenerative, world_holder::{ VoxelDataset, VoxelSide }
-};
+}};
 
 pub type ChunkLoaderId = u16;
 pub type GridPosition = (i64, i64, i64);
@@ -82,11 +82,11 @@ impl World {
         chunk_loader
     }
 
-    pub fn get_renderables( &self ) -> Vec<VoxelSide> {
+    pub fn get_renderables( &self, _camera:&Camera ) -> Vec<VoxelSide> {
         // println!( "Getting renderables" );
 
-        self.chunks_dataset.chunks.read().unwrap().values().flat_map( |c| {
-            if let Ok( chunk ) = c.try_read() {
+        self.chunks_dataset.chunks.read().unwrap().iter().flat_map( |(_coords, chunk_lock)| {
+            if let Ok( chunk ) = chunk_lock.try_read() {
                 if matches!( chunk.state, WorldChunkState::Meshed ) {
                     chunk.renderables.clone()
                 } else {
