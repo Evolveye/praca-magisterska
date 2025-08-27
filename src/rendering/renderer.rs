@@ -29,12 +29,15 @@ use std::time::Instant;
 
 use crate::app::camera::Camera;
 use crate::app::window_manager::WindowManager;
+use crate::rendering::pipeline::{create_pipeline_create_info_set, create_pipeline_edges};
+use crate::rendering::vertex::DrawMode;
+use crate::world::voxel_vertices::VoxelVertex;
 use crate::world::world_holder::Voxel;
 
 use super::model::Model;
 use super::model_strip::ModelStrip;
 use super::buffer::*;
-use super::pipeline::{ create_pipeline_for_instances, create_pipeline_for_model };
+use super::pipeline::{ create_pipeline };
 use super::texture::Texture;
 use super::vertex::{Renderable, Vertex};
 
@@ -65,63 +68,61 @@ pub struct Renderer {
 }
 
 impl Renderer {
-  pub unsafe fn create( window:&Window ) -> Result<Self> {
-    let loader = LibloadingLoader::new( LIBRARY )?;
-    let entry = Entry::new( loader ).map_err( |b| anyhow!( "{}", b ) )?;
-    let mut data = AppData::default();
-    let instance = create_instance( window, &entry, &mut data )?;
+  pub fn create( window:&Window ) -> Result<Self> {
+    unsafe {
+      let loader = LibloadingLoader::new( LIBRARY )?;
+      let entry = Entry::new( loader ).map_err( |b| anyhow!( "{}", b ) )?;
+      let mut data = AppData::default();
 
-    data.mode = AppMode::VoxelSidesStrip;
-    data.instances_count = 1;
-    // data.instances_count = 20;
-    data.surface = vk_window::create_surface( &instance, &window, &window )?;
-    pick_physical_device( &instance, &mut data )?;
+      let instance = create_instance( window, &entry, &mut data )?;
 
-    let device = create_logical_device( &entry, &instance, &mut data )?;
+      data.mode = AppMode::TerrainAndMobs;
+      data.instances_count = 1;
+      // data.instances_count = 20;
+      data.surface = vk_window::create_surface( &instance, &window, &window )?;
+      pick_physical_device( &instance, &mut data )?;
 
-    create_swapchain( window, &instance, &device, &mut data )?;
-    create_swapchain_image_views( &device, &mut data )?;
-    create_render_pass( &instance, &device, &mut data )?;
-    create_descriptor_set_layout( &device, &mut data )?;
+      let device = create_logical_device( &entry, &instance, &mut data )?;
 
-    match data.mode {
-      AppMode::Model => create_pipeline_for_model::<VertexModel>( &device, &mut data, vk::PrimitiveTopology::TRIANGLE_LIST, vk::PolygonMode::FILL )?,
-      AppMode::Voxels | AppMode::VoxelSides => create_pipeline_for_instances::<Voxel>( &device, &mut data, vk::PrimitiveTopology::TRIANGLE_LIST, vk::PolygonMode::FILL )?,
-      AppMode::VoxelSidesStrip => create_pipeline_for_instances::<Voxel>( &device, &mut data, vk::PrimitiveTopology::TRIANGLE_STRIP, vk::PolygonMode::FILL )?,
-      _ => create_pipeline_for_instances::<VertexModel>( &device, &mut data, vk::PrimitiveTopology::TRIANGLE_LIST, vk::PolygonMode::FILL )?,
+      create_swapchain( window, &instance, &device, &mut data )?;
+      create_swapchain_image_views( &device, &mut data )?;
+      create_render_pass( &instance, &device, &mut data )?;
+      create_descriptor_set_layout( &device, &mut data )?;
+      Self::create_pipelines( &device, &mut data )?;
+
+
+      // create_pipeline_for_model( &device, &mut data )?;
+      create_command_pools( &instance, &device, &mut data )?;
+
+      create_color_objects( &instance, &device, &mut data )?;
+      create_depth_objects( &instance, &device, &mut data )?;
+      create_framebuffers( &device, &mut data )?;
+
+      create_uniform_buffers( &instance, &device, &mut data )?;
+      create_descriptor_pool( &device, &mut data )?;
+      create_descriptor_sets( &device, &mut data )?;
+      create_command_buffers( &device, &mut data )?;
+
+      create_sync_objects( &device, &mut data )?;
+
+      // // create_texture_image( &instance, &device, &mut data, "src/rendering/resources/viking_room.png" )?;
+      // data.texture = Texture::load( &instance, &device, &mut data, "src/rendering/resources/viking_room.png" )?;
+      // // load_model( &mut data, "cube" )?;
+      // // load_model( &mut data, "src/rendering/resources/cube.obj" )?;
+      // // load_model( &mut data, "src/rendering/resources/viking_room.obj" )?;
+      // // load_model( &mut data, "src/rendering/resources/bunny.obj" )?;
+      // load_model( &mut data, "src/rendering/resources/barrel.obj" )?;
+      // create_vertex_buffer( &instance, &device, &mut data )?;
+      // create_index_buffer( &instance, &device, &mut data )?;
+      // // create_instance_buffer( &instance, &device, &mut data )?;
+
+      Ok( Self {
+        entry, instance, data, device,
+        models: 1,
+        frame: 0,
+        model_registrars: Vec::new(),
+      } )
     }
-
-    // create_pipeline_for_model( &device, &mut data )?;
-    create_command_pools( &instance, &device, &mut data )?;
-
-    create_color_objects( &instance, &device, &mut data )?;
-    create_depth_objects( &instance, &device, &mut data )?;
-    create_framebuffers( &device, &mut data )?;
-
-    create_uniform_buffers( &instance, &device, &mut data )?;
-    create_descriptor_pool( &device, &mut data )?;
-    create_descriptor_sets( &device, &mut data )?;
-    create_command_buffers( &device, &mut data )?;
-
-    create_sync_objects( &device, &mut data )?;
-
-    // // create_texture_image( &instance, &device, &mut data, "src/rendering/resources/viking_room.png" )?;
-    // data.texture = Texture::load( &instance, &device, &mut data, "src/rendering/resources/viking_room.png" )?;
-    // // load_model( &mut data, "cube" )?;
-    // // load_model( &mut data, "src/rendering/resources/cube.obj" )?;
-    // // load_model( &mut data, "src/rendering/resources/viking_room.obj" )?;
-    // // load_model( &mut data, "src/rendering/resources/bunny.obj" )?;
-    // load_model( &mut data, "src/rendering/resources/barrel.obj" )?;
-    // create_vertex_buffer( &instance, &device, &mut data )?;
-    // create_index_buffer( &instance, &device, &mut data )?;
-    // // create_instance_buffer( &instance, &device, &mut data )?;
-
-    Ok( Self {
-      entry, instance, data, device,
-      models: 1,
-      frame: 0,
-      model_registrars: Vec::new(),
-    } )
   }
 
   pub fn register_model( &mut self, registrar:ModelRegistrar ) {
@@ -217,6 +218,56 @@ impl Renderer {
     self.instance.destroy_instance( None );
   }
 
+  unsafe fn create_pipelines( device:&Device, data:&mut AppData ) -> Result<()> {
+    match data.mode {
+      AppMode::Voxels | AppMode::VoxelSides | AppMode::VoxelSidesStrip => {
+        let pipeline_create_info_set = create_pipeline_create_info_set::<Voxel>( device, data, vk::PrimitiveTopology::TRIANGLE_LIST, vk::PolygonMode::FILL, match data.mode {
+          AppMode::Voxels => (include_bytes!( "./shaders/voxels/vert.spv" ), include_bytes!( "./shaders/voxels/frag.spv" )),
+          AppMode::VoxelSides | AppMode::VoxelSidesStrip => (include_bytes!( "./shaders/voxel_sides/vert.spv" ), include_bytes!( "./shaders/voxel_sides/frag.spv" )),
+          _ => unreachable!()
+        } )?;
+
+        let (pipeline, pipeline_layout) = create_pipeline::<Voxel>( device, data, &pipeline_create_info_set )?;
+        data.pipeline = pipeline;
+        data.pipeline_layout = pipeline_layout;
+      },
+
+      AppMode::TerrainAndMobs => {
+        let pipeline_create_info_set = create_pipeline_create_info_set::<Voxel>( device, data, vk::PrimitiveTopology::TRIANGLE_STRIP, vk::PolygonMode::FILL,
+          (include_bytes!( "./shaders/terrain_and_mobs/voxel.vert.spv" ), include_bytes!( "./shaders/terrain_and_mobs/voxel.frag.spv" ))
+        )?;
+
+        let (pipeline, pipeline_layout) = create_pipeline::<Voxel>( device, data, &pipeline_create_info_set )?;
+        data.pipeline = pipeline;
+        data.pipeline_layout = pipeline_layout;
+
+        let (pipeline, pipeline_layout) = create_pipeline_edges::<Model<VoxelVertex>>( device, data, &pipeline_create_info_set, vk::PrimitiveTopology::LINE_LIST,
+          include_bytes!( "./shaders/terrain_and_mobs/mob.vert.spv" )
+        )?;
+
+        data.pipeline_edges = Some( pipeline );
+        data.pipeline_edges_layout = Some( pipeline_layout );
+      },
+
+      AppMode::Model | AppMode::InstancesUntexturedUnlighted | AppMode::InstancesTexturedLighted => {
+        let pipeline_create_info_set = create_pipeline_create_info_set::<VertexModel>( device, data, vk::PrimitiveTopology::TRIANGLE_LIST, vk::PolygonMode::FILL, match data.mode {
+          AppMode::Model => (include_bytes!( "./shaders/model-untextured-lighted/vert.spv" ), include_bytes!( "./shaders/model-untextured-lighted/frag.spv" )),
+          AppMode::InstancesUntexturedUnlighted => (include_bytes!( "./shaders/instances-untextured-unlighted/vert.spv" ), include_bytes!( "./shaders/instances-untextured-unlighted/frag.spv" )),
+          AppMode::InstancesTexturedLighted => (include_bytes!( "./shaders/instances-textured-lighted/vert.spv" ), include_bytes!( "./shaders/instances-textured-lighted/frag.spv" )),
+          _ => unreachable!()
+        } )?;
+
+        let (pipeline, pipeline_layout) = create_pipeline::<VertexModel>( device, data, &pipeline_create_info_set )?;
+        data.pipeline = pipeline;
+        data.pipeline_layout = pipeline_layout;
+      },
+
+      _ => todo!()
+    };
+
+    Ok(())
+  }
+
   unsafe fn recreate_swapchain( &mut self, window:&Window ) -> Result<()> {
     self.device.device_wait_idle()?;
     self.destroy_swapchain();
@@ -224,13 +275,7 @@ impl Renderer {
     create_swapchain(window, &self.instance, &self.device, &mut self.data)?;
     create_swapchain_image_views( &self.device, &mut self.data )?;
     create_render_pass( &self.instance, &self.device, &mut self.data )?;
-
-    match self.data.mode {
-      AppMode::Model => create_pipeline_for_model::<VertexModel>( &self.device, &mut self.data, vk::PrimitiveTopology::TRIANGLE_LIST, vk::PolygonMode::FILL )?,
-      AppMode::Voxels | AppMode::VoxelSides => create_pipeline_for_instances::<Voxel>( &self.device, &mut self.data, vk::PrimitiveTopology::TRIANGLE_LIST, vk::PolygonMode::FILL )?,
-      AppMode::VoxelSidesStrip => create_pipeline_for_instances::<Voxel>( &self.device, &mut self.data, vk::PrimitiveTopology::TRIANGLE_STRIP, vk::PolygonMode::FILL )?,
-      _ => create_pipeline_for_instances::<VertexModel>( &self.device, &mut self.data, vk::PrimitiveTopology::TRIANGLE_LIST, vk::PolygonMode::FILL )?,
-    }
+    Self::create_pipelines( &self.device, &mut self.data )?;
 
     create_color_objects( &self.instance, &self.device, &mut self.data )?;
     create_depth_objects( &self.instance, &self.device, &mut self.data )?;
@@ -241,7 +286,7 @@ impl Renderer {
     create_descriptor_sets( &self.device, &mut self.data )?;
 
     match self.data.mode {
-      AppMode::Voxels | AppMode::VoxelSides | AppMode::VoxelSidesStrip => {},
+      AppMode::Voxels | AppMode::VoxelSides | AppMode::VoxelSidesStrip | AppMode::TerrainAndMobs => {},
       _ => self.data.texture.recreate_descriptor_set( &self.device, self.data.texture_descriptor_set_layout, self.data.descriptor_pool )?,
     }
 
@@ -269,6 +314,11 @@ impl Renderer {
     self.data.framebuffers.iter().for_each( |f| self.device.destroy_framebuffer( *f, None ) );
 
     self.device.destroy_pipeline( self.data.pipeline, None );
+    if let Some( pipeline ) = self.data.pipeline_edges {
+      self.device.destroy_pipeline( pipeline, None );
+      self.device.destroy_pipeline_layout( self.data.pipeline_edges_layout.unwrap(), None );
+    }
+
     self.device.destroy_pipeline_layout( self.data.pipeline_layout, None );
     self.device.destroy_render_pass( self.data.render_pass, None );
 
@@ -279,68 +329,70 @@ impl Renderer {
 
 
 
-  pub unsafe fn render( &mut self, window_manager:&mut WindowManager, camera:&Camera, models:Vec<&dyn Renderable> ) -> Result<()> {
-    self.device.wait_for_fences( &[ self.data.in_flight_fences[ self.frame ] ], true, u64::MAX )?;
+  pub fn render( &mut self, window_manager:&mut WindowManager, camera:&Camera, models:Vec<&dyn Renderable> ) -> Result<()> {
+    unsafe {
+      self.device.wait_for_fences( &[ self.data.in_flight_fences[ self.frame ] ], true, u64::MAX )?;
 
-    let result = self.device.acquire_next_image_khr(
-      self.data.swapchain,
-      u64::MAX,
-      self.data.image_available_semaphores[ self.frame ],
-      vk::Fence::null(),
-    );
+      let result = self.device.acquire_next_image_khr(
+        self.data.swapchain,
+        u64::MAX,
+        self.data.image_available_semaphores[ self.frame ],
+        vk::Fence::null(),
+      );
 
-    let image_index = match result {
-      Ok(( image_index, _ )) => image_index as usize,
-      Err( vk::ErrorCode::OUT_OF_DATE_KHR ) => return self.recreate_swapchain( &window_manager.window ),
-      Err( e ) => return Err( anyhow!( e ) ),
-    };
+      let image_index = match result {
+        Ok(( image_index, _ )) => image_index as usize,
+        Err( vk::ErrorCode::OUT_OF_DATE_KHR ) => return self.recreate_swapchain( &window_manager.window ),
+        Err( e ) => return Err( anyhow!( e ) ),
+      };
 
-    if !self.data.images_in_flight[ image_index ].is_null() {
-      self.device.wait_for_fences( &[ self.data.images_in_flight[ image_index ] ], true, u64::MAX )?;
+      if !self.data.images_in_flight[ image_index ].is_null() {
+        self.device.wait_for_fences( &[ self.data.images_in_flight[ image_index ] ], true, u64::MAX )?;
+      }
+
+      self.data.images_in_flight[ image_index ] = self.data.in_flight_fences[ self.frame ];
+
+      self.update_command_buffer( image_index, models )?;
+      self.update_uniform_buffer( image_index, camera )?;
+
+      let wait_semaphores = &[ self.data.image_available_semaphores[ self.frame ] ];
+      let wait_stages = &[ vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT ];
+      let command_buffers = &[ self.data.command_buffers[ image_index ] ];
+      let signal_semaphores = &[ self.data.render_finished_semaphores[ self.frame ] ];
+      let submit_info = vk::SubmitInfo::builder()
+        .wait_semaphores( wait_semaphores )
+        .wait_dst_stage_mask( wait_stages )
+        .command_buffers( command_buffers )
+        .signal_semaphores( signal_semaphores );
+
+      self.device.reset_fences( &[ self.data.in_flight_fences[ self.frame ] ] )?;
+      self.device.queue_submit(
+        self.data.graphics_queue,
+        &[ submit_info ],
+        self.data.in_flight_fences[ self.frame ],
+      )?;
+
+      let swapchains = &[ self.data.swapchain ];
+      let image_indices = &[ image_index as u32 ];
+      let present_info = vk::PresentInfoKHR::builder()
+        .wait_semaphores( signal_semaphores )
+        .swapchains( swapchains )
+        .image_indices( image_indices );
+
+      let result = self.device.queue_present_khr( self.data.present_queue, &present_info );
+      let changed = result == Ok( vk::SuccessCode::SUBOPTIMAL_KHR ) || result == Err( vk::ErrorCode::OUT_OF_DATE_KHR );
+
+      if window_manager.resized || changed {
+        window_manager.resized = false;
+        self.recreate_swapchain( &window_manager.window )?;
+      } else if let Err( e ) = result {
+        return Err( anyhow!( e ) );
+      }
+
+      self.frame = (self.frame + 1) % MAX_FRAMES_IN_FLIGHT;
+
+      Ok(())
     }
-
-    self.data.images_in_flight[ image_index ] = self.data.in_flight_fences[ self.frame ];
-
-    self.update_command_buffer( image_index, models )?;
-    self.update_uniform_buffer( image_index, camera )?;
-
-    let wait_semaphores = &[ self.data.image_available_semaphores[ self.frame ] ];
-    let wait_stages = &[ vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT ];
-    let command_buffers = &[ self.data.command_buffers[ image_index ] ];
-    let signal_semaphores = &[ self.data.render_finished_semaphores[ self.frame ] ];
-    let submit_info = vk::SubmitInfo::builder()
-      .wait_semaphores( wait_semaphores )
-      .wait_dst_stage_mask( wait_stages )
-      .command_buffers( command_buffers )
-      .signal_semaphores( signal_semaphores );
-
-    self.device.reset_fences( &[ self.data.in_flight_fences[ self.frame ] ] )?;
-    self.device.queue_submit(
-      self.data.graphics_queue,
-      &[ submit_info ],
-      self.data.in_flight_fences[ self.frame ],
-    )?;
-
-    let swapchains = &[ self.data.swapchain ];
-    let image_indices = &[ image_index as u32 ];
-    let present_info = vk::PresentInfoKHR::builder()
-      .wait_semaphores( signal_semaphores )
-      .swapchains( swapchains )
-      .image_indices( image_indices );
-
-    let result = self.device.queue_present_khr( self.data.present_queue, &present_info );
-    let changed = result == Ok( vk::SuccessCode::SUBOPTIMAL_KHR ) || result == Err( vk::ErrorCode::OUT_OF_DATE_KHR );
-
-    if window_manager.resized || changed {
-      window_manager.resized = false;
-      self.recreate_swapchain( &window_manager.window )?;
-    } else if let Err( e ) = result {
-      return Err( anyhow!( e ) );
-    }
-
-    self.frame = (self.frame + 1) % MAX_FRAMES_IN_FLIGHT;
-
-    Ok(())
   }
 
   unsafe fn update_uniform_buffer( &mut self, image_index:usize, camera:&Camera ) -> Result<()> {
@@ -397,33 +449,6 @@ impl Renderer {
 
     self.device.cmd_begin_render_pass( command_buffer, &render_pass_begin, vk::SubpassContents::SECONDARY_COMMAND_BUFFERS );
 
-    // let secondary_command_buffers = self.model_registrars.iter()
-    //   .flat_map( |registrar| -> Vec<vk::CommandBuffer> {
-    //     let buffers = registrar( image_index );
-    //     Vec::new()
-    //   } )
-    //   .collect::<Vec<_>>();
-
-    // let secondary_command_buffers = (0..if INSTANCED_RENDERING { self.models } else { self.data.instances_count })
-    //   .map( |model_index| {
-    //     let command_buffers = &mut self.data.secondary_command_buffers[ image_index ];
-
-    //     while model_index >= command_buffers.len() {
-    //       let allocate_info = vk::CommandBufferAllocateInfo::builder()
-    //         .command_pool( self.data.command_pools[ image_index ] )
-    //         .level( vk::CommandBufferLevel::SECONDARY )
-    //         .command_buffer_count( 1 );
-
-    //       let command_buffer = self.device.allocate_command_buffers( &allocate_info )?[ 0 ];
-    //       command_buffers.push( command_buffer );
-    //     }
-
-    //     let command_buffer = command_buffers[ model_index ];
-
-    //     self.update_secondary_command_buffer( image_index, model_index, command_buffer )
-    //   } )
-    //   .collect::<Result<Vec<_>, _>>()?;
-
     let secondary_command_buffers = models.iter()
       .enumerate()
       .map( |(model_index, model)| {
@@ -462,16 +487,26 @@ impl Renderer {
       .flags( vk::CommandBufferUsageFlags::RENDER_PASS_CONTINUE )
       .inheritance_info( &inheritance_info );
 
+    let (pipeline, pipeline_layout) = if matches!( model.get_draw_mode(), DrawMode::FULL ) {
+      (self.data.pipeline, self.data.pipeline_layout)
+    } else {
+      (self.data.pipeline_edges.unwrap(), self.data.pipeline_edges_layout.unwrap())
+    };
+
     self.device.begin_command_buffer( command_buffer, &info )?;
-    self.device.cmd_bind_pipeline( command_buffer, vk::PipelineBindPoint::GRAPHICS, self.data.pipeline );
+    self.device.cmd_bind_pipeline(
+      command_buffer,
+      vk::PipelineBindPoint::GRAPHICS,
+      pipeline
+    );
 
     self.device.cmd_bind_descriptor_sets(
       command_buffer,
       vk::PipelineBindPoint::GRAPHICS,
-      self.data.pipeline_layout,
+      pipeline_layout,
       0,
       &match self.data.mode {
-        AppMode::Voxels | AppMode::VoxelSides | AppMode::VoxelSidesStrip => vec![ self.data.descriptor_sets[ image_index ] ],
+        AppMode::Voxels | AppMode::VoxelSides | AppMode::VoxelSidesStrip | AppMode::TerrainAndMobs => vec![ self.data.descriptor_sets[ image_index ] ],
         _ => vec![ self.data.descriptor_sets[ image_index ], self.data.texture.descriptor_set ],
       },
       &[]
@@ -493,7 +528,7 @@ impl Renderer {
 
     self.device.cmd_push_constants(
       command_buffer,
-      self.data.pipeline_layout,
+      pipeline_layout,
       vk::ShaderStageFlags::VERTEX,
       0,
       model_pos_bytes,
@@ -501,7 +536,7 @@ impl Renderer {
 
     self.device.cmd_push_constants(
       command_buffer,
-      self.data.pipeline_layout,
+      pipeline_layout,
       vk::ShaderStageFlags::FRAGMENT,
       64,
       opacity_bytes,
@@ -526,6 +561,7 @@ pub enum AppMode {
   Voxels,
   VoxelSides,
   VoxelSidesStrip,
+  TerrainAndMobs,
 }
 
 impl Default for AppMode {
@@ -553,8 +589,11 @@ pub struct AppData {
   pub render_pass: vk::RenderPass,
   pub uniform_descriptor_set_layout: vk::DescriptorSetLayout,
   pub texture_descriptor_set_layout: vk::DescriptorSetLayout,
+  pub pipeline_cache: vk::PipelineCache,
   pub pipeline_layout: vk::PipelineLayout,
   pub pipeline: vk::Pipeline,
+  pub pipeline_edges_layout: Option<vk::PipelineLayout>,
+  pub pipeline_edges: Option<vk::Pipeline>,
   pub framebuffers: Vec<vk::Framebuffer>,
   pub command_pool: vk::CommandPool,
   pub command_pools: Vec<vk::CommandPool>,
@@ -818,9 +857,9 @@ unsafe fn create_logical_device( entry:&Entry, instance:&Instance, data:&mut App
 
   let features = vk::PhysicalDeviceFeatures::builder()
     .sampler_anisotropy( true )
-    .sample_rate_shading( true );
+    .sample_rate_shading( true )
     // .fill_mode_non_solid( true )
-    // .wide_lines( true );
+    .wide_lines( true );
 
   let info = vk::DeviceCreateInfo::builder()
     .queue_create_infos( &queue_infos )

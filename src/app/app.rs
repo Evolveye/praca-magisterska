@@ -1,17 +1,18 @@
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use cgmath::point3;
+use cgmath::{ point3, Matrix4, SquareMatrix };
 use winit::{
     event::{ Event, WindowEvent },
     event_loop::EventLoopWindowTarget,
     keyboard::{ KeyCode, PhysicalKey }
 };
 use crate::{
-    app::{ camera::Camera, control_manager::ControlManager, settings::AppSettings, window_manager::WindowManager },
-     rendering::renderer::Renderer,
-     structure_tests::generate_world_as_world,
-     world::{
+    app::{ camera::{Camera, FrustumVertex}, control_manager::ControlManager, settings::AppSettings, window_manager::WindowManager },
+    rendering::{ model::{Model, ModelInstance}, renderer::Renderer },
+    structure_tests::generate_world_as_world,
+    world::{
+        voxel_vertices::{ VOXEL_EDGES_INDICES, VOXEL_VERTICES },
         world::{ ChunkLoaderhandle, World, CHUNK_SIZE },
         world_renderer::WorldRenderer
     }
@@ -30,6 +31,8 @@ pub struct App {
     pub start_time: Instant,
     pub last_tick_time: Instant,
     pub fps_time: Instant,
+
+    model: Model<FrustumVertex>,
 }
 
 impl App {
@@ -40,10 +43,23 @@ impl App {
         let control_manager = ControlManager::new( point3( half_chunk_size, 15.0, half_chunk_size ), point3( half_chunk_size, 0.0, 0.0 ) );
         let window_size = window_manager.window.inner_size();
         let camera = Camera::new( control_manager.position, control_manager.rotation, window_size.width, window_size.height );
-        let renderer = unsafe { Renderer::create( &window_manager.window )? };
+        let renderer = Renderer::create( &window_manager.window )?;
         let world_renderer = WorldRenderer::new( &renderer );
         let settings = AppSettings::new();
         let ( world, camera_chunk_loader ) = generate_world_as_world();
+
+        let model = unsafe {
+            let mut model = Model::<FrustumVertex>::new( &renderer, VOXEL_VERTICES.map( |v| v.into() ).to_vec(), VOXEL_EDGES_INDICES.to_vec() ).unwrap();
+
+            model.update_instance_buffer( &renderer, vec![
+                ModelInstance {
+                    instance_transform: Matrix4::identity()
+                }
+                // VoxelSide::new( vec3( 0.0, 0.0, 0.0 ), Color { red:255, green:64, blue:64 }, 3 ),
+            ] ).unwrap();
+
+            model
+        };
 
         Ok( App {
             window_manager,
@@ -58,6 +74,8 @@ impl App {
             start_time: Instant::now(),
             last_tick_time: Instant::now(),
             fps_time: Instant::now(),
+
+            model,
         } )
     }
 
@@ -74,13 +92,20 @@ impl App {
             self.fps_time = timestamp;
         }
 
-        self.world.move_chunk_loader_to( &self.camera_chunk_loader, self.control_manager.position.into() );
-        self.world.update();
+        self.world.move_chunk_loader_to( &self.camera_chunk_loader, self.control_manager.position.into(), self.control_manager.freezed );
+
+        if !self.control_manager.freezed {
+            self.world.update();
+        }
 
         self.control_manager.update( &self.settings, time_delta.as_secs_f32() );
-        self.camera.update_view( self.control_manager.position, self.control_manager.rotation );
+        self.camera.update_view( self.control_manager.position, self.control_manager.rotation, self.control_manager.freezed );
 
-        self.world_renderer.update_instances_buffer( &self.renderer, self.world.get_renderables( &self.camera ) );
+        self.world_renderer.update_instances_buffer(
+            &self.renderer,
+            if self.control_manager.freezed { self.world.debug_meshes.clone() } else { self.world.get_renderables( &self.camera ) }
+        );
+        unsafe { self.model.update_vertex_buffer::<FrustumVertex>( &self.renderer, self.camera.get_frustum_corners().into() ).unwrap() };
     }
 
     pub fn run_loop( &mut self ) {
@@ -98,10 +123,10 @@ impl App {
                         }
 
                         self.tick();
-
-                        unsafe {
-                            self.renderer.render( &mut self.window_manager, &self.camera, vec![ &self.world_renderer ] ).unwrap();
-                        }
+                        let _ = self.renderer.render( &mut self.window_manager, &self.camera, vec![
+                            &self.world_renderer,
+                            &self.model
+                        ] );
                     },
 
                     WindowEvent::CloseRequested => App::destroy( elwt, self ),
@@ -123,15 +148,16 @@ impl App {
         } ).unwrap();
     }
 
-    fn destroy( elwt:&EventLoopWindowTarget<()>, state:&mut App ) {
+    fn destroy( elwt:&EventLoopWindowTarget<()>, app:&mut App ) {
         elwt.exit();
 
         unsafe {
-            state.renderer.device_wait_idle();
-            state.world_renderer.model.destroy( &state.renderer.device );
-            state.renderer.destroy();
+            app.renderer.device_wait_idle();
+            app.world_renderer.model.destroy( &app.renderer.device );
+            app.model.destroy( &app.renderer.device );
+            app.renderer.destroy();
         }
 
-        println!( "App uptime = {:?}", state.start_time.elapsed() );
+        println!( "App uptime = {:?}", app.start_time.elapsed() );
     }
 }

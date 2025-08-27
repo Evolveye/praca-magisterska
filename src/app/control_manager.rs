@@ -20,6 +20,7 @@ pub struct ControlManager {
     pub mouse_position: Point2<f32>,
     pub mouse_last_used_position: Point2<f32>,
     pub lmb_pressed: bool,
+    pub freezed: bool,
 }
 
 impl ControlManager {
@@ -36,7 +37,8 @@ impl ControlManager {
             velocity_forward: 0.0,
             mouse_position: point2( 0.0, 0.0 ),
             mouse_last_used_position: point2( 0.0, 0.0 ),
-            lmb_pressed: false
+            lmb_pressed: false,
+            freezed: false,
         };
 
         instance.update_position( position, target );
@@ -86,13 +88,20 @@ impl ControlManager {
         let pressed = event.state == ElementState::Pressed;
 
         match event.physical_key {
-            PhysicalKey::Code( KeyCode::ArrowLeft  ) | PhysicalKey::Code( KeyCode::KeyA ) => self.velocity_left  = if pressed { settings.movement_speed } else { 0.0 },
-            PhysicalKey::Code( KeyCode::ArrowRight ) | PhysicalKey::Code( KeyCode::KeyD ) => self.velocity_right = if pressed { settings.movement_speed } else { 0.0 },
-            PhysicalKey::Code( KeyCode::ShiftLeft  ) => self.velocity_down = if pressed { settings.movement_speed } else { 0.0 },
-            PhysicalKey::Code( KeyCode::Space      ) => self.velocity_up   = if pressed { settings.movement_speed } else { 0.0 },
-            PhysicalKey::Code( KeyCode::ArrowUp    ) | PhysicalKey::Code( KeyCode::KeyW ) => self.velocity_forward  = if pressed { settings.movement_speed } else { 0.0 },
-            PhysicalKey::Code( KeyCode::ArrowDown  ) | PhysicalKey::Code( KeyCode::KeyS ) => self.velocity_backward = if pressed { settings.movement_speed } else { 0.0 },
+            PhysicalKey::Code( KeyCode::ArrowLeft   ) | PhysicalKey::Code( KeyCode::KeyA ) => self.velocity_left  = if pressed { settings.movement_speed } else { 0.0 },
+            PhysicalKey::Code( KeyCode::ArrowRight  ) | PhysicalKey::Code( KeyCode::KeyD ) => self.velocity_right = if pressed { settings.movement_speed } else { 0.0 },
+            PhysicalKey::Code( KeyCode::ShiftLeft   ) => self.velocity_down = if pressed { settings.movement_speed } else { 0.0 },
+            PhysicalKey::Code( KeyCode::Space       ) => self.velocity_up   = if pressed { settings.movement_speed } else { 0.0 },
+            PhysicalKey::Code( KeyCode::ArrowUp     ) | PhysicalKey::Code( KeyCode::KeyW ) => self.velocity_forward  = if pressed { settings.movement_speed } else { 0.0 },
+            PhysicalKey::Code( KeyCode::ArrowDown   ) | PhysicalKey::Code( KeyCode::KeyS ) => self.velocity_backward = if pressed { settings.movement_speed } else { 0.0 },
             PhysicalKey::Code( KeyCode::ControlLeft ) => self.sprint_init = if pressed { Some( Instant::now() ) } else { None },
+
+            PhysicalKey::Code( KeyCode::KeyF ) => {
+                if pressed {
+                    self.freezed = !self.freezed;
+                    println!( "freezed={}", self.freezed )
+                }
+            }
 
             _ => {}
         }

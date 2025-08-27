@@ -8,8 +8,16 @@ pub type Vec2 = cgmath::Vector2<f32>;
 pub type Vec3 = cgmath::Vector3<f32>;
 
 
+pub enum DrawMode {
+  FULL,
+  EDGES,
+}
+
 pub trait Renderable {
   unsafe fn render( &self, device:&Device, command_buffer:vk::CommandBuffer );
+  fn get_draw_mode( &self ) -> DrawMode {
+    DrawMode::FULL
+  }
 }
 
 pub trait RendererModelDescriptions {
@@ -20,6 +28,13 @@ pub trait RendererModelDescriptions {
 }
 
 
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct SimpleVertex {
+  pub pos: Vec3,
+  pub color: Vec3,
+}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]

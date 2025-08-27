@@ -1,5 +1,6 @@
 use anyhow::Result;
-use cgmath::{ vec2, vec3, Vector3 };
+use cgmath::{ vec2, vec3 };
+use std::os::raw::c_void;
 use std::{
   collections::HashMap,
   io::BufReader,
@@ -12,11 +13,14 @@ use vulkanalia::{
   prelude::v1_0::*
 };
 
+use crate::world::voxel_vertices::VoxelVertex;
+
 use super::renderer::Renderer;
 use super::vertex::{Renderable, RendererModelDescriptions, Vertex};
 use super::buffer::{ create_buffer, copy_buffer };
 
 type Vec3 = cgmath::Vector3<f32>;
+type Mat4 = cgmath::Matrix4<f32>;
 
 pub const BOX_VERTICES:[ Vertex; 8 ] = [
   // Vertex::new( vec3( -1.0, -1.0, -1.0 ), vec3( 1.0, 0.0, 0.0 ), vec2( 1.0, 0.0 ) ),
@@ -61,30 +65,52 @@ pub struct Model<TVertex> {
   pub indices: Vec<u32>,
   pub vertex_buffer: vk::Buffer,
   pub vertex_buffer_memory: vk::DeviceMemory,
+  pub vertex_buffer_capacity: u64,
+  pub vertices_count: u32,
+  pub vertex_staging_buffer: vk::Buffer,
+  pub vertex_staging_buffer_memory: vk::DeviceMemory,
+  pub vertex_staging_mapped_memory: *mut c_void,
   pub index_buffer: vk::Buffer,
   pub index_buffer_memory: vk::DeviceMemory,
-  pub instances_count: u32,
   pub instance_buffer: vk::Buffer,
   pub instance_buffer_memory: vk::DeviceMemory,
+  pub instance_buffer_capacity: u64,
+  pub instances_count: u32,
+  pub instance_staging_buffer: vk::Buffer,
+  pub instance_staging_buffer_memory: vk::DeviceMemory,
+  pub instance_staging_mapped_memory: *mut c_void,
 }
 
 #[allow(dead_code)]
 impl<TVertex> Model<TVertex> {
   pub unsafe fn new( renderer:&Renderer, vertices:Vec<TVertex>, indices:Vec<u32> ) -> Result<Self> {
     let ( index_buffer, index_buffer_memory ) = Model::<TVertex>::create_index_buffer( renderer, &indices )?;
-    let ( vertex_buffer, vertex_buffer_memory ) = Model::<TVertex>::create_vertex_buffer( renderer, &vertices )?;
 
-    Ok( Self {
-      vertices,
+    let mut model = Self {
+      vertices: vec![],
       indices,
-      vertex_buffer,
-      vertex_buffer_memory,
+      vertex_buffer: Default::default(),
+      vertex_buffer_memory: Default::default(),
+      vertex_buffer_capacity: 0,
+      vertices_count: 0,
+      vertex_staging_buffer: Default::default(),
+      vertex_staging_buffer_memory: Default::default(),
+      vertex_staging_mapped_memory: Default::default(),
       index_buffer,
       index_buffer_memory,
-      instances_count: 0,
       instance_buffer: Default::default(),
       instance_buffer_memory: Default::default(),
-    } )
+      instance_buffer_capacity: 0,
+      instances_count: 0,
+      instance_staging_buffer: Default::default(),
+      instance_staging_buffer_memory: Default::default(),
+      instance_staging_mapped_memory: Default::default(),
+    };
+
+    model.update_vertex_buffer::<TVertex>( renderer, vertices )?;
+    model.update_instance_buffer::<TVertex>( renderer, vec![] )?;
+
+    Ok( model )
   }
 
   unsafe fn create_index_buffer( renderer:&Renderer, indices:&Vec<u32> ) -> Result<( vk::Buffer, vk::DeviceMemory )> {
@@ -122,104 +148,109 @@ impl<TVertex> Model<TVertex> {
     Ok(( index_buffer, index_buffer_memory ))
   }
 
-  unsafe fn create_vertex_buffer( renderer:&Renderer, vertices:&Vec<TVertex> ) -> Result<( vk::Buffer, vk::DeviceMemory )> {
+  pub unsafe fn update_vertex_buffer<T>( &mut self, renderer:&Renderer, vertices:Vec<TVertex> ) -> Result<()> {
     let Renderer { ref instance, ref device, ref data, .. } = renderer;
+    let size = vertices.len();
+    let size = (size_of::<T>() * if size == 0 { 1 } else { size } as usize) as u64;
 
-    let size = (size_of::<TVertex>() * vertices.len()) as u64;
-    let ( staging_buffer, staging_buffer_memory ) = create_buffer(
-      instance,
-      device,
-      data.physical_device,
-      size,
-      vk::BufferUsageFlags::TRANSFER_SRC,
-      vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-    )?;
+    self.vertices_count = vertices.len() as u32;
+    self.vertices = vertices;
 
-    let memory = device.map_memory( staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
+    if size > self.vertex_buffer_capacity {
+      if self.vertex_buffer_capacity != 0 {
+        let _ = device.device_wait_idle();
 
-    memcpy( vertices.as_ptr(), memory.cast(), vertices.len() );
-    device.unmap_memory( staging_buffer_memory );
+        device.unmap_memory( self.vertex_staging_buffer_memory );
 
-    let ( vertex_buffer, vertex_buffer_memory ) = create_buffer(
-      instance,
-      device,
-      data.physical_device,
-      size,
-      vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
-      vk::MemoryPropertyFlags::DEVICE_LOCAL,
-    )?;
+        device.destroy_buffer( self.vertex_buffer, None );
+        device.free_memory( self.vertex_buffer_memory, None );
 
-    copy_buffer( device, data.command_pool, data.graphics_queue, staging_buffer, vertex_buffer, size )?;
+        device.destroy_buffer( self.vertex_staging_buffer, None );
+        device.free_memory( self.vertex_staging_buffer_memory, None );
+      }
 
-    device.destroy_buffer( staging_buffer, None );
-    device.free_memory( staging_buffer_memory, None );
+      let ( staging_buffer, staging_buffer_memory ) = create_buffer(
+        instance,
+        device,
+        data.physical_device,
+        size,
+        vk::BufferUsageFlags::TRANSFER_SRC,
+        vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
+      )?;
 
-    Ok(( vertex_buffer, vertex_buffer_memory ))
+      let ( vertex_buffer, vertex_buffer_memory ) = create_buffer(
+        instance,
+        device,
+        data.physical_device,
+        size,
+        vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
+        vk::MemoryPropertyFlags::DEVICE_LOCAL,
+      )?;
+
+      self.vertex_buffer = vertex_buffer;
+      self.vertex_buffer_memory = vertex_buffer_memory;
+      self.vertex_staging_buffer = staging_buffer;
+      self.vertex_staging_buffer_memory = staging_buffer_memory;
+      self.vertex_staging_mapped_memory = device.map_memory( staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
+
+      self.vertex_buffer_capacity = size;
+    }
+
+    memcpy( self.vertices.as_ptr(), self.vertex_staging_mapped_memory.cast(), self.vertices.len() );
+    copy_buffer( device, data.command_pool, data.graphics_queue, self.vertex_staging_buffer, self.vertex_buffer, size )?;
+
+    Ok(())
   }
 
-  pub unsafe fn create_instance_buffer<T>( renderer:&Renderer, instances_data:Vec<T> ) -> Result<( vk::Buffer, vk::DeviceMemory )> {
+  pub unsafe fn update_instance_buffer<T>( &mut self, renderer:&Renderer, instances_data:Vec<T> ) -> Result<()> {
     let Renderer { ref instance, ref device, ref data, .. } = renderer;
+    let size = instances_data.len();
+    let size = (size_of::<T>() * if size == 0 { 1 } else { size } as usize) as u64;
 
-    let size = (size_of::<T>() * instances_data.len() as usize) as u64;
-    let ( staging_buffer, staging_buffer_memory ) = create_buffer(
-      instance,
-      device,
-      data.physical_device,
-      size,
-      vk::BufferUsageFlags::TRANSFER_SRC,
-      vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-    )?;
+    self.instances_count = instances_data.len() as u32;
 
-    let memory = device.map_memory( staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
+    if size > self.instance_buffer_capacity {
+      if self.instance_buffer_capacity != 0 {
+        let _ = device.device_wait_idle();
 
-    memcpy( instances_data.as_ptr(), memory.cast(), instances_data.len() as usize );
-    device.unmap_memory( staging_buffer_memory );
+        device.unmap_memory( self.instance_staging_buffer_memory );
 
-    let ( instance_buffer, instance_buffer_memory ) = create_buffer(
-      instance,
-      device,
-      data.physical_device,
-      size,
-      vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
-      vk::MemoryPropertyFlags::DEVICE_LOCAL,
-    )?;
+        device.destroy_buffer( self.instance_buffer, None );
+        device.free_memory( self.instance_buffer_memory, None );
 
-    copy_buffer( device, data.command_pool, data.graphics_queue, staging_buffer, instance_buffer, size )?;
+        device.destroy_buffer( self.instance_staging_buffer, None );
+        device.free_memory( self.instance_staging_buffer_memory, None );
+      }
 
-    device.destroy_buffer( staging_buffer, None );
-    device.free_memory( staging_buffer_memory, None );
+      let ( staging_buffer, staging_buffer_memory ) = create_buffer(
+        instance,
+        device,
+        data.physical_device,
+        size,
+        vk::BufferUsageFlags::TRANSFER_SRC,
+        vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
+      )?;
 
-    Ok(( instance_buffer, instance_buffer_memory ))
-  }
+      let ( instance_buffer, instance_buffer_memory ) = create_buffer(
+        instance,
+        device,
+        data.physical_device,
+        size,
+        vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
+        vk::MemoryPropertyFlags::DEVICE_LOCAL,
+      )?;
 
-  pub unsafe fn update_instances_buffer_with_defaults( &mut self, renderer:&Renderer, instances_count:u32 ) -> Result<()> {
-    let instances_data = (0..instances_count).map( |model_index| {
-        // // RING
-        // let radius = 10.0;
-        // let theta = 2.0 * std::f32::consts::PI * (model_index as f32) / (instances_count as f32);
-        // let x = radius * theta.cos();
-        // let z = radius * theta.sin();
-        // let translate = Vector3::new( x, 0.0, z );
-        // ModelInstance { translate }
+      self.instance_buffer = instance_buffer;
+      self.instance_buffer_memory = instance_buffer_memory;
+      self.instance_staging_buffer = staging_buffer;
+      self.instance_staging_buffer_memory = staging_buffer_memory;
+      self.instance_staging_mapped_memory = device.map_memory( staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty() )?;
 
-        let side_size = 50;
-        let x = (model_index % side_size) as f32;
-        let y = (model_index / (side_size * side_size)) as f32;
-        let z = ((model_index / side_size) % side_size) as f32;
-        let translate = Vector3::new( x, y, z );
-        ModelInstance { translate }
-    } ).collect::<Vec<ModelInstance>>();
+      self.instance_buffer_capacity = size;
+    }
 
-    self.update_instances_buffer( renderer, instances_data )
-  }
-
-  pub unsafe fn update_instances_buffer<T>( &mut self, renderer:&Renderer, instances_data:Vec<T> ) -> Result<()> {
-    let instances_count = instances_data.len() as u32;
-    let ( instance_buffer, instance_buffer_memory ) = Model::<TVertex>::create_instance_buffer::<T>( renderer, instances_data )?;
-
-    self.instance_buffer = instance_buffer;
-    self.instance_buffer_memory = instance_buffer_memory;
-    self.instances_count = instances_count;
+    memcpy( instances_data.as_ptr(), self.instance_staging_mapped_memory.cast(), instances_data.len() as usize );
+    copy_buffer( device, data.command_pool, data.graphics_queue, self.instance_staging_buffer, self.instance_buffer, size )?;
 
     Ok(())
   }
@@ -228,11 +259,17 @@ impl<TVertex> Model<TVertex> {
     device.destroy_buffer( self.vertex_buffer, None );
     device.free_memory( self.vertex_buffer_memory, None );
 
+    device.destroy_buffer( self.vertex_staging_buffer, None );
+    device.free_memory( self.vertex_staging_buffer_memory, None );
+
     device.destroy_buffer( self.index_buffer, None );
     device.free_memory( self.index_buffer_memory, None );
 
     device.destroy_buffer( self.instance_buffer, None );
     device.free_memory( self.instance_buffer_memory, None );
+
+    device.destroy_buffer( self.instance_staging_buffer, None );
+    device.free_memory( self.instance_staging_buffer_memory, None );
   }
 }
 
@@ -242,12 +279,16 @@ impl<TVertex> Renderable for Model<TVertex> {
     device.cmd_bind_index_buffer( command_buffer, self.index_buffer, 0, vk::IndexType::UINT32 );
     device.cmd_draw_indexed( command_buffer, self.indices.len() as u32, self.instances_count, 0, 0, 0 );
   }
+
+  fn get_draw_mode( &self ) -> super::vertex::DrawMode {
+      super::vertex::DrawMode::EDGES
+  }
 }
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct ModelInstance {
-  pub translate: Vec3,
+  pub instance_transform: Mat4,
 }
 
 
@@ -330,45 +371,31 @@ impl Model<Vertex> {
   }
 }
 
-impl RendererModelDescriptions for Model<Vertex> {
+impl<TVertex> RendererModelDescriptions for Model<TVertex> {
   fn binding_description() -> vk::VertexInputBindingDescription {
     vk::VertexInputBindingDescription::builder()
       .binding( 0 )
-      .stride( size_of::<Vertex>() as u32 )
+      .stride( size_of::<VoxelVertex>() as u32 )
       .input_rate( vk::VertexInputRate::VERTEX )
       .build()
   }
 
   fn attribute_description() -> Vec<vk::VertexInputAttributeDescription> {
     let pos = vk::VertexInputAttributeDescription::builder()
-      .binding( 0 )
-      .location( 0 )
-      .format( vk::Format::R32G32B32_SFLOAT )
-      .offset( 0 )
-      .build();
+        .binding( 0 )
+        .location( 0 )
+        .format( vk::Format::R32G32B32_SFLOAT )
+        .offset( 0 )
+        .build();
 
     let color = vk::VertexInputAttributeDescription::builder()
-      .binding( 0 )
-      .location( 1 )
-      .format( vk::Format::R32G32B32_SFLOAT )
-      .offset( size_of::<Vec3>() as u32 )
-      .build();
+        .binding( 0 )
+        .location( 1 )
+        .format( vk::Format::R32G32B32_SFLOAT )
+        .offset( size_of::<Vec3>() as u32 )
+        .build();
 
-    let normal = vk::VertexInputAttributeDescription::builder()
-      .binding( 0 )
-      .location( 2 )
-      .format( vk::Format::R32G32B32_SFLOAT )
-      .offset( (size_of::<Vec3>() + size_of::<Vec3>()) as u32 )
-      .build();
-
-    let tex_coord = vk::VertexInputAttributeDescription::builder()
-      .binding( 0 )
-      .location( 3 )
-      .format( vk::Format::R32G32_SFLOAT )
-      .offset( (size_of::<Vec3>() + size_of::<Vec3>() + size_of::<Vec3>()) as u32 )
-      .build();
-
-    vec![ pos, color, normal, tex_coord ]
+    vec![ pos, color ]
   }
 
   fn instances_binding_description() -> vk::VertexInputBindingDescription {
@@ -380,14 +407,34 @@ impl RendererModelDescriptions for Model<Vertex> {
   }
 
   fn instances_attribute_description() -> Vec<vk::VertexInputAttributeDescription> {
-    let instance_matrix = vk::VertexInputAttributeDescription::builder()
+    let model_x = vk::VertexInputAttributeDescription::builder()
       .binding( 1 )
-      .location( 4 )
+      .location( 2 )
       .format( vk::Format::R32G32B32_SFLOAT )
-      // .format( vk::Format::R32G32B32A32_SFLOAT )
       .offset( 0 )
       .build();
 
-    vec![ instance_matrix ]
+    let model_y = vk::VertexInputAttributeDescription::builder()
+      .binding( 1 )
+      .location( 3 )
+      .format( vk::Format::R32G32B32_SFLOAT )
+      .offset( size_of::<Vec3>() as u32 )
+      .build();
+
+    let model_z = vk::VertexInputAttributeDescription::builder()
+      .binding( 1 )
+      .location( 4 )
+      .format( vk::Format::R32G32B32_SFLOAT )
+      .offset( (size_of::<Vec3>() * 2) as u32 )
+      .build();
+
+    let model_w = vk::VertexInputAttributeDescription::builder()
+      .binding( 1 )
+      .location( 5 )
+      .format( vk::Format::R32G32B32_SFLOAT )
+      .offset( (size_of::<Vec3>() * 3) as u32 )
+      .build();
+
+    vec![ model_x, model_y, model_z, model_w ]
   }
 }

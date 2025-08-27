@@ -1,5 +1,5 @@
 use cgmath::vec3;
-use crate::rendering::vertex::Vec3;
+use crate::rendering::vertex::{SimpleVertex, Vec3};
 
 #[allow(dead_code)]
 pub const VOXEL_VERTICES:[ VoxelVertex; 24 ] = [
@@ -71,9 +71,26 @@ pub const VOXEL_SIDE_INDICES:&[ u32; 6 ] = &[
     0, 1, 2, 2, 3, 0,        // Top
 ];
 
+#[allow(dead_code)]
+pub const VOXEL_EDGES_INDICES:&[ u32; 24 ] = &[
+    0,1, 1,2, 2,3, 3,0,   // front face edges
+    4,5, 5,6, 6,7, 7,4,   // back face edges
+    // 0,5, 1,4, 2,7, 3,6,   // connections front ↔ back
+    0,4, 1,5, 2,6, 3,7,   // connections front ↔ back
+];
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct VoxelVertex {
     pub pos: Vec3,
     pub normal: Vec3,
+}
+
+impl Into<SimpleVertex> for VoxelVertex {
+    fn into( self ) -> SimpleVertex {
+        SimpleVertex {
+            pos: self.pos,
+            color: self.normal,
+        }
+    }
 }
