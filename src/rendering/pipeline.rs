@@ -212,10 +212,11 @@ impl<'a> Drop for PipelineCreateInfoSet<'a> {
   }
 }
 
-pub unsafe fn create_pipeline_edges<T:RendererModelDescriptions>( device:&Device, data:&mut AppData, info_set:&PipelineCreateInfoSet, primitive_topology:vk::PrimitiveTopology, vertex_shader:&[u8] ) -> Result<(vk::Pipeline, vk::PipelineLayout)> {
-  let (vert_shader_module, vert_stage) = unsafe {
-    create_shader_stage( device, vertex_shader, vk::ShaderStageFlags::VERTEX )?
-  };
+pub unsafe fn create_pipeline_edges<T:RendererModelDescriptions>( device:&Device, data:&mut AppData, info_set:&PipelineCreateInfoSet, primitive_topology:vk::PrimitiveTopology, shaders:(&[u8], &[u8]) ) -> Result<(vk::Pipeline, vk::PipelineLayout)> {
+  let ((vert_shader_module, vert_stage), (frag_shader_module, frag_stage)) = unsafe {(
+    create_shader_stage( device, shaders.0, vk::ShaderStageFlags::VERTEX )?,
+    create_shader_stage( device, shaders.1, vk::ShaderStageFlags::FRAGMENT )?,
+  )};
 
   let (binding_descriptions, attribute_descriptions) = {
     let binding_descriptions = vec![ T::binding_description(), T::instances_binding_description() ];
@@ -238,7 +239,7 @@ pub unsafe fn create_pipeline_edges<T:RendererModelDescriptions>( device:&Device
     .primitive_restart_enable( false );
 
   let builder = info_set.get_builder( data );
-  let stages = &[vert_stage.build(), info_set.stages[ 1 ]];
+  let stages = &[vert_stage.build(), frag_stage.build()];
   let builder = builder
     .stages( stages )
     .vertex_input_state( &vertex_input_state )
@@ -248,6 +249,7 @@ pub unsafe fn create_pipeline_edges<T:RendererModelDescriptions>( device:&Device
   let pipeline = device.create_graphics_pipelines( vk::PipelineCache::null(), &[ builder ], None )?.0[ 0 ];
 
   device.destroy_shader_module( vert_shader_module, None );
+  device.destroy_shader_module( frag_shader_module, None );
 
   Ok( (pipeline, pipeline_layout) )
 }

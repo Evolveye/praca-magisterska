@@ -10,13 +10,14 @@ use crate::{
     }
 };
 
-pub struct GeneratorOfRealisticallyTerrain {
+pub struct GeneratorOfPeaksAndValleys {
     noise: SimplexNoise,
     noise_frequency: f64,
     noise_amplitude: f64,
 }
 
-impl GeneratorOfRealisticallyTerrain {
+impl GeneratorOfPeaksAndValleys {
+    #[allow(unused)]
     pub fn new( seed:u32) -> Self {
         Self {
             noise: SimplexNoise::new( seed ),
@@ -33,7 +34,7 @@ impl GeneratorOfRealisticallyTerrain {
     }
 }
 
-impl WorldGenerative for GeneratorOfRealisticallyTerrain {
+impl WorldGenerative for GeneratorOfPeaksAndValleys {
     fn generate_chunk( &self, dataset:&mut VoxelDataset, origin:(i64, i64, i64), size:u8 ) -> Octree<Voxel> {
         // println!( "Chunk generation {:?}, size={}", origin, size );
         let origin = (origin.0 * size as i64, origin.1 * size as i64, origin.2 * size as i64);

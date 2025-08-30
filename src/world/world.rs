@@ -78,6 +78,7 @@ impl World {
         let chunk_loader = Arc::new( RefCell::new( ChunkLoader { id, position, render_distance } ) );
         // let chunk_loader = Rc::new( RefCell::new( ChunkLoader { id, position, render_distance } ) );
 
+        // println!( "create_chunk_loader | {:?}", position );
         self.chunk_loaders.insert( id, Arc::downgrade( &chunk_loader ) );
 
         self.load_chunks( WorldChunk::get_chunk_position_from_world_position( position ), render_distance, Some( id ) );
@@ -235,6 +236,8 @@ impl World {
         let chunk_size = CHUNK_SIZE as i64;
         let loader_data = (loader.id, loader.render_distance);
 
+
+        // println!( "move_chunk_loader_to | {:?}, {:?}", loader.position, move_to );
         loader.position = move_to;
         drop( loader );
 
@@ -282,8 +285,8 @@ impl World {
             match res {
                 ChunkRes::ChunksStateUpdate( loader_id, chunks_to_remove, chunks_to_calculable ) => {
                     // println!( "main: ChunksStateUpdate" );
-                    // println!( "main:  - {chunks_to_remove:?}" );
-                    // println!( "main:  - {chunks_to_calculable:?}" );
+                    // println!( "main:  - chunks_to_remove={chunks_to_remove:?}" );
+                    // println!( "main:  - chunks_to_calculable={chunks_to_calculable:?}" );
 
                     let chunks = self.chunks_dataset.chunks.read().unwrap();
                     // println!( "main: {:?}", chunks.iter()
@@ -357,6 +360,7 @@ impl World {
                         // drop( tasks );
                         // self.worker_tasks.1.notify_all();
 
+                        println!( "Remesh queued" );
                         self.worker_tasks.0.lock().unwrap().push_back( ChunkCmd::RemeshChunks( chunk_pos, render_distance ) );
                         self.worker_tasks.1.notify_one();
                     }

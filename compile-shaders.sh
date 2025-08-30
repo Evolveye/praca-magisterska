@@ -2,6 +2,7 @@ function compile_terrain_with_mobs {
   glslc ./src/rendering/shaders/$1/voxel.vert -o ./src/rendering/shaders/$1/voxel.vert.spv
   glslc ./src/rendering/shaders/$1/voxel.frag -o ./src/rendering/shaders/$1/voxel.frag.spv
   glslc ./src/rendering/shaders/$1/mob.vert -o ./src/rendering/shaders/$1/mob.vert.spv
+  glslc ./src/rendering/shaders/$1/mob.frag -o ./src/rendering/shaders/$1/mob.frag.spv
 }
 
 function compile {

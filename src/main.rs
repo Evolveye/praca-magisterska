@@ -1,6 +1,7 @@
 mod world;
 mod noise;
 mod structure_tests;
+mod chunks_generators;
 mod rendering;
 mod app;
 

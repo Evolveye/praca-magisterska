@@ -44,7 +44,7 @@ impl WorldChunk {
         self.state = WorldChunkState::Dirty;
     }
 
-    pub fn remesh( &mut self, mut offset:GridPosition, neighbours:Vec<RwLockReadGuard<'_, WorldChunk>> ) -> bool {
+    pub fn remesh( &mut self, offset:GridPosition, neighbours:Vec<RwLockReadGuard<'_, WorldChunk>> ) -> bool {
         let Some( ref structure ) = self.structure else { return false };
 
         if matches!( self.state, WorldChunkState::Meshed ) {
@@ -63,17 +63,19 @@ impl WorldChunk {
 
         // println!( "Remeshing chunk {:?}", offset );
 
-        offset.0 = offset.0 * CHUNK_SIZE as i64;
-        offset.1 = offset.1 * CHUNK_SIZE as i64;
-        offset.2 = offset.2 * CHUNK_SIZE as i64;
+        let world_offset = (
+            offset.0 * CHUNK_SIZE as i64,
+            offset.1 * CHUNK_SIZE as i64,
+            offset.2 * CHUNK_SIZE as i64,
+        );
 
         let mut renderables = vec![];
         let mut col_face_masks = vec![ 0; CHUNK_SIZE_X3 * 2 ];
         let neighbour_shift = CHUNK_SIZE - 1;
         let axies_neighbours = [
-            (&neighbours[ 13 ], &neighbours[ 12 ]),
-            (&neighbours[ 21 ], &neighbours[  4 ]),
-            (&neighbours[ 15 ], &neighbours[ 10 ]),
+            (&neighbours[ 13 ], &neighbours[ 12 ]), // (right, left)
+            (&neighbours[ 21 ], &neighbours[  4 ]), // (top,   bottom)
+            (&neighbours[ 15 ], &neighbours[ 10 ]), // (front, back)
         ];
 
         for axis in 0..3 {
@@ -81,10 +83,10 @@ impl WorldChunk {
                 let index = CHUNK_SIZE_X2 * axis + i;
                 let column = structure.solids_mask.data[ index ];
 
-                let Some( ref neighbour_a_shift ) = axies_neighbours[ axis ].0.structure else { panic!( "Neighbours of remeshed chunk must have terrain (state={:?}", axies_neighbours[ axis ].0.state ) };
+                let Some( ref neighbour_a_shift ) = axies_neighbours[ axis ].0.structure else { Self::panic_meshing_missing_neighbour( axies_neighbours[ axis ].0, offset, axis, -1 ) };
                 let neighbour_a_shift = (neighbour_a_shift.solids_mask.data[ index ] & 1) << neighbour_shift;
 
-                let Some( ref neighbour_b_shift ) = axies_neighbours[ axis ].1.structure else { panic!( "Neighbours of remeshed chunk must have terrain (state={:?}", axies_neighbours[ axis ].1.state ) };
+                let Some( ref neighbour_b_shift ) = axies_neighbours[ axis ].1.structure else { Self::panic_meshing_missing_neighbour( axies_neighbours[ axis ].1, offset, axis,  1 ) };
                 let neighbour_b_shift = (neighbour_b_shift.solids_mask.data[ index ] >> neighbour_shift) & 1;
 
                 col_face_masks[ CHUNK_SIZE_X2 * (axis * 2    ) + i ] = column & !(column << 1 | neighbour_b_shift);
@@ -109,9 +111,9 @@ impl WorldChunk {
 
                         if let Some( voxel ) = structure.data.get( voxel_pos.0, voxel_pos.1, voxel_pos.2 ) {
                             renderables.push( VoxelSide::from_voxel_rc(
-                                offset.0 + voxel_pos.0 as i64,
-                                offset.1 + voxel_pos.1 as i64,
-                                offset.2 + voxel_pos.2 as i64,
+                                world_offset.0 + voxel_pos.0 as i64,
+                                world_offset.1 + voxel_pos.1 as i64,
+                                world_offset.2 + voxel_pos.2 as i64,
                                 axis_turn as u8 + 1,
                                 &voxel
                             ) );
@@ -127,6 +129,17 @@ impl WorldChunk {
         self.state = WorldChunkState::Meshed;
 
         true
+    }
+
+    fn panic_meshing_missing_neighbour( neighbour:&RwLockReadGuard<'_, WorldChunk>, chunk_pos:GridPosition, axis:usize, addition:i64 ) -> ! {
+        let neighbour_pos = match axis {
+            0 => (chunk_pos.0 - addition, chunk_pos.1, chunk_pos.2),
+            1 => (chunk_pos.0, chunk_pos.1 + addition, chunk_pos.2),
+            2 => (chunk_pos.0, chunk_pos.1, chunk_pos.2 - addition),
+            _ => unreachable!(),
+        };
+
+        panic!( "Neighbours of remeshed chunk must have terrain (axis={axis}, addition={addition}, chunk_pos={chunk_pos:?}, neighbour_pos={neighbour_pos:?}, neighbour_state={:?})", neighbour.state )
     }
 
     #[allow(unused)]

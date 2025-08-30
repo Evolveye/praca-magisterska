@@ -37,16 +37,19 @@ pub struct App {
 
 impl App {
     pub fn new() -> Result<Self> {
-        let half_chunk_size = CHUNK_SIZE as f32 / 2.0;
+        let _half_chunk_size = CHUNK_SIZE as f32 / 2.0;
 
         let window_manager = WindowManager::new()?;
-        let control_manager = ControlManager::new( point3( half_chunk_size, 15.0, half_chunk_size ), point3( half_chunk_size, 0.0, 0.0 ) );
+        let control_manager = ControlManager::new(
+            // point3( _half_chunk_size, 15.0, _half_chunk_size ), point3( _half_chunk_size, 0.0, 0.0 )
+            point3( -120.0, 70.0, -120.0 ), point3( 64.0, 64.0, 64.0 )
+        );
         let window_size = window_manager.window.inner_size();
         let camera = Camera::new( control_manager.position, control_manager.rotation, window_size.width, window_size.height );
         let renderer = Renderer::create( &window_manager.window )?;
         let world_renderer = WorldRenderer::new( &renderer );
         let settings = AppSettings::new();
-        let ( world, camera_chunk_loader ) = generate_world_as_world();
+        let ( world, camera_chunk_loader ) = generate_world_as_world( control_manager.position );
 
         let model = unsafe {
             let mut model = Model::<FrustumVertex>::new( &renderer, VOXEL_VERTICES.map( |v| v.into() ).to_vec(), VOXEL_EDGES_INDICES.to_vec() ).unwrap();
@@ -105,6 +108,8 @@ impl App {
             &self.renderer,
             if self.control_manager.freezed { self.world.debug_meshes.clone() } else { self.world.get_renderables( &self.camera ) }
         );
+
+
         unsafe { self.model.update_vertex_buffer::<FrustumVertex>( &self.renderer, self.camera.get_frustum_corners().into() ).unwrap() };
     }
 
@@ -123,10 +128,13 @@ impl App {
                         }
 
                         self.tick();
-                        let _ = self.renderer.render( &mut self.window_manager, &self.camera, vec![
-                            &self.world_renderer,
-                            &self.model
-                        ] );
+                        let _ = self.renderer.render( &mut self.window_manager, &self.camera,
+                            if self.control_manager.freezed {
+                                vec![ &self.world_renderer, &self.model ]
+                            } else {
+                                vec![ &self.world_renderer ]
+                            }
+                        );
                     },
 
                     WindowEvent::CloseRequested => App::destroy( elwt, self ),

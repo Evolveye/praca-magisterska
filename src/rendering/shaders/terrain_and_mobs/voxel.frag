@@ -17,11 +17,12 @@ void main() {
 	// vec3 N = normalize( inNormal );
 	// vec3 lightDir = normalize( inLightPos - inPos );
 	// float diffuse = max( dot( N, lightDir ), 0.0 );
-	vec3 ambient = vec3( 0.02 ) * inColor;
+	// vec3 ambient = vec3( 0.02 ) * inColor;
+	vec3 ambient = inColor;
 
   // Ambient Occlusion — bazujące na lokalnej pozycji względem środka instancji
 	float dist = length( inPosModel );           // odległość od środka sześcianu
-	float maxDist = length( vec3( 0.5 ) );       // maksymalna odległość do narożnika
+	float maxDist = length( vec3( 1.0 ) );       // maksymalna odległość do narożnika
 	float ao = 1.0 - smoothstep( 0.0, maxDist, dist ); // centrum jaśniejsze, narożniki ciemniejsze
 	ao = mix( 0.2, 1.0, ao );                  // siła AO (ciemność krawędzi)
 

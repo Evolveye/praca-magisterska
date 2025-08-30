@@ -242,7 +242,7 @@ impl Renderer {
         data.pipeline_layout = pipeline_layout;
 
         let (pipeline, pipeline_layout) = create_pipeline_edges::<Model<VoxelVertex>>( device, data, &pipeline_create_info_set, vk::PrimitiveTopology::LINE_LIST,
-          include_bytes!( "./shaders/terrain_and_mobs/mob.vert.spv" )
+          (include_bytes!( "./shaders/terrain_and_mobs/mob.vert.spv" ), include_bytes!( "./shaders/terrain_and_mobs/mob.frag.spv" ))
         )?;
 
         data.pipeline_edges = Some( pipeline );
