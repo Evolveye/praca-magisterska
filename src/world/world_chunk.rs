@@ -15,6 +15,7 @@ pub enum WorldChunkState {
     Meshed,
     Calculable,
     Stashing,
+    Disabled,
 }
 
 struct WorldChunkData {
@@ -39,6 +40,12 @@ impl WorldChunk {
         }
     }
 
+    pub fn new_disabled() -> Self {
+        let mut chunk = Self::new();
+        chunk.state = WorldChunkState::Disabled;
+        chunk
+    }
+
     pub fn set_data( &mut self, data:Octree<Voxel> ) {
         self.structure = Some( WorldChunkData { solids_mask:data.to_bitmask(), data } );
         self.state = WorldChunkState::Dirty;
@@ -47,7 +54,7 @@ impl WorldChunk {
     pub fn remesh( &mut self, offset:GridPosition, neighbours:Vec<RwLockReadGuard<'_, WorldChunk>> ) -> bool {
         let Some( ref structure ) = self.structure else { return false };
 
-        if matches!( self.state, WorldChunkState::Meshed ) {
+        if matches!( self.state, WorldChunkState::Meshed | WorldChunkState::Disabled ) {
             return false
         }
 
@@ -83,11 +90,23 @@ impl WorldChunk {
                 let index = CHUNK_SIZE_X2 * axis + i;
                 let column = structure.solids_mask.data[ index ];
 
-                let Some( ref neighbour_a_shift ) = axies_neighbours[ axis ].0.structure else { Self::panic_meshing_missing_neighbour( axies_neighbours[ axis ].0, offset, axis, -1 ) };
-                let neighbour_a_shift = (neighbour_a_shift.solids_mask.data[ index ] & 1) << neighbour_shift;
+                let neighbour_a_shift = if let Some( ref neighbour_a_shift ) = axies_neighbours[ axis ].0.structure {
+                    (neighbour_a_shift.solids_mask.data[ index ] & 1) << neighbour_shift
+                } else {
+                    match axies_neighbours[ axis ].0.state {
+                        WorldChunkState::Disabled => 0,
+                        _ => Self::panic_meshing_missing_neighbour( axies_neighbours[ axis ].0, offset, axis, -1 )
+                    }
+                };
 
-                let Some( ref neighbour_b_shift ) = axies_neighbours[ axis ].1.structure else { Self::panic_meshing_missing_neighbour( axies_neighbours[ axis ].1, offset, axis,  1 ) };
-                let neighbour_b_shift = (neighbour_b_shift.solids_mask.data[ index ] >> neighbour_shift) & 1;
+                let neighbour_b_shift = if let Some( ref neighbour_b_shift ) = axies_neighbours[ axis ].1.structure {
+                    (neighbour_b_shift.solids_mask.data[ index ] >> neighbour_shift) & 1
+                } else {
+                    match axies_neighbours[ axis ].1.state {
+                        WorldChunkState::Disabled => 0,
+                        _ => Self::panic_meshing_missing_neighbour( axies_neighbours[ axis ].1, offset, axis,  1 )
+                    }
+                };
 
                 col_face_masks[ CHUNK_SIZE_X2 * (axis * 2    ) + i ] = column & !(column << 1 | neighbour_b_shift);
                 col_face_masks[ CHUNK_SIZE_X2 * (axis * 2 + 1) + i ] = column & !(column >> 1 | neighbour_a_shift);

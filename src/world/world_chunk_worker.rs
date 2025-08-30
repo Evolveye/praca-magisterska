@@ -35,7 +35,7 @@ impl ChunksDataset {
 
 #[allow(dead_code)]
 pub enum ChunkCmd {
-    EnsureChunks( GroupId, GridPosition, u32, u32 ),
+    EnsureChunks( GroupId, GridPosition, Option<u8>, u32, u32 ),
     GenerateChunks( GroupId, GridPosition, u32, u32 ),
     MultithreadedRemeshChunks( GridPosition, u32, u32 ),
     RemeshChunks( GridPosition, u8 ),
@@ -87,9 +87,9 @@ pub fn start_chunk_worker( worker_id:u8, chunks_dataset:&Arc<ChunksDataset>, tas
 
 
                     match task {
-                        ChunkCmd::EnsureChunks( id, position, index_from, count ) => {
+                        ChunkCmd::EnsureChunks( id, position, max_radius, index_from, count ) => {
                             let index_to = index_from + count;
-                            let new_chunks = get_nonexistant_chunks( &chunks_dataset, position, index_from, index_to );
+                            let new_chunks = get_nonexistant_chunks( &chunks_dataset, position, max_radius, index_from, index_to );
                             let _ = tx.send( ChunkRes::ChunksEnsured( new_chunks, id, position, index_from, index_to ) );
                         },
                         ChunkCmd::GenerateChunks( id, position, index_from, index_to ) => {
@@ -219,7 +219,7 @@ fn axis_processor(
     }
 }
 
-fn get_nonexistant_chunks( chunks_dataset:&Arc<ChunksDataset>, position:GridPosition, index_from:u32, index_to:u32 ) -> Vec<(GridPosition, RwLock<WorldChunk>)> {
+fn get_nonexistant_chunks( chunks_dataset:&Arc<ChunksDataset>, position:GridPosition, max_radius:Option<u8>, index_from:u32, index_to:u32 ) -> Vec<(GridPosition, RwLock<WorldChunk>)> {
     // println!( "get_nonexistant_chunks" );
 
     let mut new_chunks = vec![];
@@ -235,7 +235,21 @@ fn get_nonexistant_chunks( chunks_dataset:&Arc<ChunksDataset>, position:GridPosi
         );
 
         if !chunks.contains_key( &chunk_pos ) {
-            new_chunks.push( (chunk_pos, RwLock::new( WorldChunk::new() )) );
+            let chunk = if let Some( max_radius ) = max_radius {
+                let radius = chunk_pos.0.abs()
+                    .max( chunk_pos.1.abs() )
+                    .max( chunk_pos.2.abs() );
+
+                if radius > max_radius as i64 {
+                    WorldChunk::new_disabled()
+                } else {
+                    WorldChunk::new()
+                }
+            } else {
+                WorldChunk::new()
+            };
+
+            new_chunks.push( (chunk_pos, RwLock::new( chunk )) );
         }
     }
 

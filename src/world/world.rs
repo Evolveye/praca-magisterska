@@ -37,6 +37,7 @@ enum BlockingTask {
 #[allow(dead_code)]
 pub struct World {
     chunks_dataset: Arc<ChunksDataset>,
+    max_radius: Option<u8>,
     chunk_loaders: HashMap<ChunkLoaderId, sync::Weak<RefCell<ChunkLoader>>>,
     dataset: VoxelDataset,
     // chunks_tx: mpsc::Sender<ChunkCmd>,
@@ -48,7 +49,7 @@ pub struct World {
 }
 
 impl World {
-    pub fn new( default_generator:Box<dyn WorldGenerative> ) -> Self {
+    pub fn new( default_generator:Box<dyn WorldGenerative>, max_radius:Option<u8> ) -> Self {
         debug_assert!( CHUNK_SIZE <= 64, "CHUNK_SIZE should be <= 64, because it is bit capacity of u64" );
 
         // let (cmd_tx, cmd_rx) = mpsc::channel();
@@ -62,6 +63,7 @@ impl World {
 
         Self {
             chunks_dataset,
+            max_radius,
             dataset: VoxelDataset::new(),
             chunk_loaders: HashMap::new(),
             // chunks_tx: cmd_tx,
@@ -255,7 +257,7 @@ impl World {
 
         if shift_x | shift_y | shift_z != 0 {
             let new_loader_chunk_pos = (move_to_chunk_x, move_to_chunk_y, move_to_chunk_z);
-            println!( "New chunk pos = ({new_loader_chunk_pos:?})" );
+            println!( "New loader pos = ({new_loader_chunk_pos:?})" );
 
             if freezed {
                 return
@@ -360,7 +362,7 @@ impl World {
                         // drop( tasks );
                         // self.worker_tasks.1.notify_all();
 
-                        println!( "Remesh queued" );
+                        // println!( "Remesh queued" );
                         self.worker_tasks.0.lock().unwrap().push_back( ChunkCmd::RemeshChunks( chunk_pos, render_distance ) );
                         self.worker_tasks.1.notify_one();
                     }
@@ -409,7 +411,7 @@ impl World {
 
         loop {
             let count = if cube_size - i >= group_size { group_size } else { cube_size - i };
-            tasks.push_back( ChunkCmd::EnsureChunks( generation_id.clone(), center_chunk_position, i, count ) );
+            tasks.push_back( ChunkCmd::EnsureChunks( generation_id.clone(), center_chunk_position, self.max_radius, i, count ) );
 
             i += group_size;
             if i >= cube_size { break }

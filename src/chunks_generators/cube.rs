@@ -22,6 +22,7 @@ pub struct GeneratorOfCube {
 }
 
 impl GeneratorOfCube {
+    #[allow(dead_code)]
     pub fn new( seed:u32) -> Self {
         Self {
             noise: SimplexNoise::new( seed ),
