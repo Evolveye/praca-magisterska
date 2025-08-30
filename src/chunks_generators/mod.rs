@@ -1,3 +1,12 @@
 pub mod peaks_and_valleys;
 pub mod cube;
-pub mod create_voxel;
+pub mod utilities;
+pub mod test_1_empty;
+pub mod test_2_single;
+pub mod test_3_half;
+pub mod test_4_half_random;
+pub mod test_5_without_single;
+pub mod test_6_full;
+pub mod test_7_half_random_with_differenties;
+pub mod test_8_full_with_differenties;
+pub mod test_9_natural;

@@ -236,14 +236,18 @@ fn get_nonexistant_chunks( chunks_dataset:&Arc<ChunksDataset>, position:GridPosi
 
         if !chunks.contains_key( &chunk_pos ) {
             let chunk = if let Some( max_radius ) = max_radius {
-                let radius = chunk_pos.0.abs()
-                    .max( chunk_pos.1.abs() )
-                    .max( chunk_pos.2.abs() );
-
-                if radius > max_radius as i64 {
+                if chunk_pos.0 < 0 || chunk_pos.1 < 0 || chunk_pos.2 < 0 {
                     WorldChunk::new_disabled()
                 } else {
-                    WorldChunk::new()
+                    let radius = chunk_pos.0.abs()
+                        .max( chunk_pos.1.abs() )
+                        .max( chunk_pos.2.abs() );
+
+                    if radius >= max_radius as i64 {
+                        WorldChunk::new_disabled()
+                    } else {
+                        WorldChunk::new()
+                    }
                 }
             } else {
                 WorldChunk::new()

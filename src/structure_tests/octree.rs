@@ -218,15 +218,25 @@ impl<T> OctreeNode<T> {
         }
     }
 
-    fn remove( &mut self, depth:u8, x:u32, y:u32, z:u32 ) -> Option<Arc<T>> {
+    fn remove( &mut self, reversed_depth:u8, x:u32, y:u32, z:u32 ) -> Option<Arc<T>> {
         match self {
             OctreeNode::Leaf( value ) => {
-                value.take()
+                let value = value.take();
+
+                if reversed_depth == 0 {
+                    value
+                } else {
+                    let branch = OctreeBranch::new_filled_by( value );
+
+                    *self = OctreeNode::Branch( Box::new( branch ) );
+
+                    self.remove( reversed_depth, x, y, z )
+                }
             }
 
-            OctreeNode::Branch(branch) => {
-                let child_index = OctreeBranch::<T>::get_child_index( depth, &(x, y, z) );
-                let result = branch.children[child_index].remove( depth - 1, x, y, z );
+            OctreeNode::Branch( branch ) => {
+                let child_index = OctreeBranch::<T>::get_child_index( reversed_depth, &(x, y, z) );
+                let result = branch.children[child_index].remove( reversed_depth - 1, x, y, z );
 
                 branch.children[child_index].try_compress();
                 self.try_compress();

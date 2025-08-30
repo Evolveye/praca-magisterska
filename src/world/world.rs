@@ -37,7 +37,7 @@ enum BlockingTask {
 #[allow(dead_code)]
 pub struct World {
     chunks_dataset: Arc<ChunksDataset>,
-    max_radius: Option<u8>,
+    pub max_radius: Option<u8>,
     chunk_loaders: HashMap<ChunkLoaderId, sync::Weak<RefCell<ChunkLoader>>>,
     dataset: VoxelDataset,
     // chunks_tx: mpsc::Sender<ChunkCmd>,
@@ -257,7 +257,7 @@ impl World {
 
         if shift_x | shift_y | shift_z != 0 {
             let new_loader_chunk_pos = (move_to_chunk_x, move_to_chunk_y, move_to_chunk_z);
-            println!( "New loader pos = ({new_loader_chunk_pos:?})" );
+            println!( "New loader pos = {new_loader_chunk_pos:?}" );
 
             if freezed {
                 return

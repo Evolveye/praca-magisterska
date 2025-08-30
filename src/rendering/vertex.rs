@@ -8,15 +8,22 @@ pub type Vec2 = cgmath::Vector2<f32>;
 pub type Vec3 = cgmath::Vector3<f32>;
 
 
+#[derive(Clone, Debug)]
 pub enum DrawMode {
   FULL,
   EDGES,
 }
 
+impl Default for DrawMode {
+  fn default() -> Self {
+      Self::FULL
+  }
+}
+
 pub trait Renderable {
   unsafe fn render( &self, device:&Device, command_buffer:vk::CommandBuffer );
-  fn get_draw_mode( &self ) -> DrawMode {
-    DrawMode::FULL
+  fn get_draw_mode( &self ) -> &DrawMode {
+    &DrawMode::FULL
   }
 }
 

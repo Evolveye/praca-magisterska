@@ -1,20 +1,29 @@
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use cgmath::{ point3, Matrix4, SquareMatrix };
+use cgmath::{ point3, vec3, Matrix4, SquareMatrix };
 use winit::{
     event::{ Event, WindowEvent },
     event_loop::EventLoopWindowTarget,
     keyboard::{ KeyCode, PhysicalKey }
 };
 use crate::{
-    app::{ camera::{Camera, FrustumVertex}, control_manager::ControlManager, settings::AppSettings, window_manager::WindowManager },
-    rendering::{ model::{Model, ModelInstance}, renderer::Renderer },
+    app::{
+        camera::{ Camera, FrustumVertex },
+        control_manager::ControlManager,
+        settings::AppSettings,
+        window_manager::WindowManager,
+    },
+    rendering::{
+        model::{ Model, ModelInstance },
+        renderer::Renderer,
+        vertex::{ Renderable, SimpleVertex },
+    },
     structure_tests::generate_world_as_world,
     world::{
-        voxel_vertices::{ VOXEL_EDGES_INDICES, VOXEL_VERTICES },
+        voxel_vertices::{ VOXEL_CORNERS, VOXEL_EDGES_INDICES, VOXEL_VERTICES },
         world::{ ChunkLoaderhandle, World, CHUNK_SIZE },
-        world_renderer::WorldRenderer
+        world_renderer::WorldRenderer,
     }
 };
 
@@ -32,7 +41,8 @@ pub struct App {
     pub last_tick_time: Instant,
     pub fps_time: Instant,
 
-    model: Model<FrustumVertex>,
+    frustum_model: Model<FrustumVertex>,
+    world_border_model: Option<Model<SimpleVertex>>
 }
 
 impl App {
@@ -42,7 +52,7 @@ impl App {
         let window_manager = WindowManager::new()?;
         let control_manager = ControlManager::new(
             // point3( _half_chunk_size, 15.0, _half_chunk_size ), point3( _half_chunk_size, 0.0, 0.0 )
-            point3( -120.0, 70.0, -120.0 ), point3( 64.0, 64.0, 64.0 )
+            point3( -24.0, 70.0, -165.0 ), point3( 64.0, 60.0, 64.0 )
         );
         let window_size = window_manager.window.inner_size();
         let camera = Camera::new( control_manager.position, control_manager.rotation, window_size.width, window_size.height );
@@ -58,10 +68,39 @@ impl App {
                 ModelInstance {
                     instance_transform: Matrix4::identity()
                 }
-                // VoxelSide::new( vec3( 0.0, 0.0, 0.0 ), Color { red:255, green:64, blue:64 }, 3 ),
             ] ).unwrap();
 
             model
+        };
+
+        let border_model = if let Some( max_radius ) = world.max_radius {
+            let scale = CHUNK_SIZE as f32 * max_radius as f32;
+            let vertices = VOXEL_CORNERS.map( |v| {
+                let pos = vec3(
+                    (v.pos.x + 0.5) * scale - 0.5,
+                    (v.pos.y + 0.5) * scale - 0.5,
+                    (v.pos.z + 0.5) * scale - 0.5
+                );
+
+                SimpleVertex {
+                    color: vec3( 1.0, 0.0, 0.0 ),
+                    pos,
+                }
+            } ).into();
+
+            unsafe {
+                let mut border_model = Model::<SimpleVertex>::new( &renderer, vertices, VOXEL_EDGES_INDICES.to_vec() ).unwrap();
+
+                border_model.update_instance_buffer( &renderer, vec![
+                    ModelInstance {
+                        instance_transform: Matrix4::identity()
+                    }
+                ] ).unwrap();
+
+                Some( border_model )
+            }
+        } else {
+            None
         };
 
         Ok( App {
@@ -78,7 +117,8 @@ impl App {
             last_tick_time: Instant::now(),
             fps_time: Instant::now(),
 
-            model,
+            frustum_model: model,
+            world_border_model: border_model,
         } )
     }
 
@@ -109,8 +149,7 @@ impl App {
             if self.control_manager.freezed { self.world.debug_meshes.clone() } else { self.world.get_renderables( &self.camera ) }
         );
 
-
-        unsafe { self.model.update_vertex_buffer::<FrustumVertex>( &self.renderer, self.camera.get_frustum_corners().into() ).unwrap() };
+        unsafe { self.frustum_model.update_vertex_buffer::<FrustumVertex>( &self.renderer, self.camera.get_frustum_corners().into() ).unwrap() };
     }
 
     pub fn run_loop( &mut self ) {
@@ -128,13 +167,17 @@ impl App {
                         }
 
                         self.tick();
-                        let _ = self.renderer.render( &mut self.window_manager, &self.camera,
-                            if self.control_manager.freezed {
-                                vec![ &self.world_renderer, &self.model ]
-                            } else {
-                                vec![ &self.world_renderer ]
-                            }
-                        );
+                        let mut models:Vec<&dyn Renderable> = if self.control_manager.freezed {
+                            vec![ &self.world_renderer, &self.frustum_model ]
+                        } else {
+                            vec![ &self.world_renderer ]
+                        };
+
+                        if let Some( ref model ) = self.world_border_model {
+                            models.push( model );
+                        }
+
+                        let _ = self.renderer.render( &mut self.window_manager, &self.camera, models );
                     },
 
                     WindowEvent::CloseRequested => App::destroy( elwt, self ),
@@ -162,7 +205,10 @@ impl App {
         unsafe {
             app.renderer.device_wait_idle();
             app.world_renderer.model.destroy( &app.renderer.device );
-            app.model.destroy( &app.renderer.device );
+            app.frustum_model.destroy( &app.renderer.device );
+            if let Some( model ) = app.world_border_model.take() {
+                model.destroy( &app.renderer.device );
+            }
             app.renderer.destroy();
         }
 

@@ -13,6 +13,7 @@ use vulkanalia::{
   prelude::v1_0::*
 };
 
+use crate::rendering::vertex::DrawMode;
 use crate::world::voxel_vertices::VoxelVertex;
 
 use super::renderer::Renderer;
@@ -280,8 +281,8 @@ impl<TVertex> Renderable for Model<TVertex> {
     device.cmd_draw_indexed( command_buffer, self.indices.len() as u32, self.instances_count, 0, 0, 0 );
   }
 
-  fn get_draw_mode( &self ) -> super::vertex::DrawMode {
-      super::vertex::DrawMode::EDGES
+  fn get_draw_mode( &self ) -> &DrawMode {
+      &DrawMode::EDGES
   }
 }
 

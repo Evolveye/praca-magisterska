@@ -1,12 +1,10 @@
 use crate::{
-    chunks_generators::create_voxel::create_voxel,
+    chunks_generators::utilities::create_voxel,
     noise::simplex_noise::SimplexNoise,
     structure_tests::octree::Octree,
     world::{
         world_generator::WorldGenerative,
-        world_holder::{
-            Color, Material, Voxel, VoxelDataset, WorldHolding
-        }
+        world_holder::{ Material, Voxel, VoxelDataset, WorldHolding }
     }
 };
 
@@ -89,7 +87,6 @@ impl WorldGenerative for GeneratorOfCube {
                     let gradient_value_inv = 1.0 - gradient_value;
 
                     let voxel = if value < 0.25 || max_coord < 5 { None } else {
-
                         let color = if gradient_value_inv == 0.0 {
                             self.color_start
                         } else if gradient_value_inv < 0.8 {
@@ -105,11 +102,7 @@ impl WorldGenerative for GeneratorOfCube {
                         Some( create_voxel(
                             dataset,
                             (String::from( "grass" ), Material { _density:10 }),
-                            (format!( "grass-{}", gradient_value ), Color {
-                                red: color.0,
-                                green: color.1,
-                                blue: color.2,
-                            } ),
+                            (format!( "grass-{}", gradient_value ), color.into() ),
                         ) )
                     };
 

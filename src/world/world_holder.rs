@@ -81,6 +81,16 @@ pub struct Color {
     pub blue: u8,
 }
 
+impl Into<Color> for (u8, u8, u8) {
+    fn into( self ) -> Color {
+        Color {
+            red: self.0,
+            green: self.1,
+            blue: self.2,
+        }
+    }
+}
+
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct CommonVoxelData {
