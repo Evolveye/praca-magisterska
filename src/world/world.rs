@@ -1,10 +1,10 @@
 use std::{
     cell::RefCell,
     collections::{HashMap, VecDeque},
-    sync::{ self, mpsc, Arc, Condvar, Mutex, RwLock },
+    sync::{ self, mpsc, Arc, Condvar, Mutex, RwLock }, time::Instant,
 };
 
-use crate::{app::camera::{Camera, Frustum, FrustumCheck}, world::{
+use crate::{app::camera::{Camera, Frustum, FrustumCheck}, flags::{FLAG_PROFILING_WORLD_GENERATION, FLAG_PROFILING_WORLD_RENDERING}, world::{
     world_chunk::{ WorldChunk, WorldChunkState }, world_chunk_worker::{ start_chunk_worker, ChunkCmd, ChunkRes, ChunksDataset, GroupId }, world_generator::WorldGenerative, world_holder::{ VoxelDataset, VoxelSide }
 }};
 
@@ -44,7 +44,7 @@ pub struct World {
     chunks_rx: mpsc::Receiver<ChunkRes>,
     worker_tasks: Arc<(Mutex<VecDeque<ChunkCmd>>,Condvar)>,
     blocking_tasks_queue: VecDeque<BlockingTask>,
-    tasks_groups: HashMap<GroupId,(Option<ChunkLoaderId>, u32)>,
+    tasks_groups: HashMap<GroupId,(Option<ChunkLoaderId>, u32, Instant)>,
     pub debug_meshes: Vec<VoxelSide>,
 }
 
@@ -340,7 +340,10 @@ impl World {
                         let chunk_loader = chunk_loader.borrow();
                         let chunk_pos = WorldChunk::get_chunk_position_from_world_position( chunk_loader.position );
                         let render_distance = chunk_loader.render_distance;
+                        let loader_id = chunk_loader.id;
                         drop( chunk_loader );
+
+                        let meshing_id = GroupId::new();
 
                         // let diameter = render_distance as u32 * 2 + 1;
                         // let cube_size = diameter * diameter * diameter;
@@ -363,10 +366,25 @@ impl World {
                         // self.worker_tasks.1.notify_all();
 
                         // println!( "Remesh queued" );
-                        self.worker_tasks.0.lock().unwrap().push_back( ChunkCmd::RemeshChunks( chunk_pos, render_distance ) );
+
+                        if FLAG_PROFILING_WORLD_GENERATION && group_tasks.1 == 0 {
+                            println!( "Chunks generation time: {:?}", group_tasks.2.elapsed() );
+                        }
+
+                        self.tasks_groups.insert( meshing_id.clone(), (Some( loader_id ), 1, Instant::now()) );
+                        self.worker_tasks.0.lock().unwrap().push_back( ChunkCmd::RemeshChunks( meshing_id, chunk_pos, render_distance ) );
                         self.worker_tasks.1.notify_one();
                     }
                 },
+
+                ChunkRes::ChunksMeshed( group_id ) => {
+                    let group_tasks = self.tasks_groups.get_mut( &group_id ).unwrap();
+                    group_tasks.1 -= 1;
+
+                    if FLAG_PROFILING_WORLD_RENDERING && group_tasks.1 == 0 {
+                        println!( "Chunks generation time: {:?}", group_tasks.2.elapsed() );
+                    }
+                }
 
                 // ChunkRes::NewChunks( chunks, position, render_distance ) => {
                 //     // println!( "main: NewChunks" );
@@ -417,7 +435,7 @@ impl World {
             if i >= cube_size { break }
         }
 
-        self.tasks_groups.insert( generation_id, (loader_id, i / group_size) );
+        self.tasks_groups.insert( generation_id, (loader_id, i / group_size, Instant::now()) );
         self.worker_tasks.1.notify_all();
     }
 }

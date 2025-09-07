@@ -1,0 +1,3 @@
+pub const FLAG_PROFILING_WORLD_GENERATION:bool = true;
+pub const FLAG_PROFILING_WORLD_RENDERING:bool = true;
+pub const FLAG_PROFILING_WORLD_HOLDER_INITIALIZATION:bool = true;

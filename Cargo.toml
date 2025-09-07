@@ -1,5 +1,5 @@
 [package]
-name = "praca-magisterska"
+name = "praca_magisterska"
 version = "0.1.0"
 authors = ["evolveye <stolarski.paw@gmail.com>"]
 edition = "2021"
@@ -18,3 +18,17 @@ vulkanalia = { version = "=0.23.0", features = ["libloading", "provisional", "wi
 winit = "0.29"
 rand = "0.9"
 image = "0.25"
+dhat = "0.3"
+
+[profile.release]
+debug = 1
+
+[features]
+dhat-heap = []
+
+[dev-dependencies]
+criterion = { version = "0.7.0", features = ["html_reports"] }
+
+[[bench]]
+name = "criterion"
+harness = false

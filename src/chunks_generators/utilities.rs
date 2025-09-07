@@ -65,6 +65,18 @@ fn hsv_to_rgb( h:f32, s:f32, v:f32 ) -> (u8, u8, u8) {
     )
 }
 
+pub fn generate_woksel_index( chunk_pos:(i64, i64, i64), voxel_pos:(u32, u32, u32), chunk_size:u32 ) -> u32 {
+    let mut index = (voxel_pos.0 + voxel_pos.1 * chunk_size + voxel_pos.2 * chunk_size * chunk_size) as i64;
+    let size = chunk_size as i64;
+    let chunk = size * size * size;
+
+    index = index.wrapping_add( chunk_pos.0.wrapping_mul( chunk ) );
+    index = index.wrapping_add( chunk_pos.1.wrapping_mul( chunk * 32 ) );
+    index = index.wrapping_add( chunk_pos.2.wrapping_mul( chunk * 64 ) );
+
+    (index as u64 % u32::MAX as u64) as u32
+}
+
 pub fn hash_u32( mut x:u32 ) -> u32 {
     x ^= x >> 16;
     x = x.wrapping_mul(0x7feb_352d);

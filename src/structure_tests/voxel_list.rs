@@ -2,18 +2,18 @@ use std::{ mem::size_of, sync::Arc };
 
 use crate::world::{ world_chunk::ChunkBitmask, world_holder::{ Voxel, VoxelSide, WorldHolding } };
 
-pub struct VoxelInWorld {
+pub struct VoxelInWorld<T> {
     x: u32,
     y: u32,
     z: u32,
-    voxel: Arc<Voxel>
+    voxel: Arc<T>
 }
 
-pub struct VoxelList {
-    pub data: Vec<VoxelInWorld>,
+pub struct VoxelList<T> {
+    pub data: Vec<VoxelInWorld<T>>,
 }
 
-impl VoxelList {
+impl<T> VoxelList<T> {
     #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
@@ -22,7 +22,7 @@ impl VoxelList {
     }
 }
 
-impl WorldHolding for VoxelList {
+impl WorldHolding for VoxelList<Voxel> {
     fn get_voxel( &self, x:u32, y:u32, z:u32 ) -> Option<Arc<Voxel>> {
         match self.data.iter().find( |v| v.x == x && v.y == y && v.z == z ) {
             Some( voxel_in_world ) => Some( voxel_in_world.voxel.clone() ),
@@ -89,10 +89,10 @@ impl WorldHolding for VoxelList {
         let its_size = size_of::<Self>();
         println!( " - its size = {}", its_size );
 
-        let root_vec_size = size_of::<Vec<VoxelInWorld>>();
+        let root_vec_size = size_of::<Vec<VoxelInWorld<Voxel>>>();
         println!( " - root vector size = {}", root_vec_size );
 
-        let voxel_in_world_size = size_of::<VoxelInWorld>();
+        let voxel_in_world_size = size_of::<VoxelInWorld<Voxel>>();
         println!( " - voxel in world size = {}", voxel_in_world_size );
 
         let voxel_size = size_of::<Arc<Voxel>>();

@@ -22,6 +22,8 @@ impl GeneratorOfTest9Natural {
 
 impl WorldGenerative for GeneratorOfTest9Natural {
     fn generate_chunk( &self, dataset:&mut VoxelDataset, origin:(i64, i64, i64), size:u8 ) -> Octree<Voxel> {
-        self.cube_generator.generate_chunk( dataset, origin, size )
+        let world_holder = self.cube_generator.generate_chunk( dataset, origin, size );
+
+        world_holder
     }
 }

@@ -37,8 +37,8 @@ impl ChunksDataset {
 pub enum ChunkCmd {
     EnsureChunks( GroupId, GridPosition, Option<u8>, u32, u32 ),
     GenerateChunks( GroupId, GridPosition, u32, u32 ),
-    MultithreadedRemeshChunks( GridPosition, u32, u32 ),
-    RemeshChunks( GridPosition, u8 ),
+    MultithreadedRemeshChunks( GroupId, GridPosition, u32, u32 ),
+    RemeshChunks( GroupId, GridPosition, u8 ),
     UpdateChunkLoaderChunks( ChunkLoaderId, u8, GridPosition, GridPosition ),
 }
 
@@ -47,6 +47,7 @@ pub enum ChunkRes {
     ChunksEnsured( Vec<((i64, i64, i64), RwLock<WorldChunk>)>, GroupId, GridPosition, u32, u32 ),
     ChunksStateUpdate( ChunkLoaderId, Vec<GridPosition>, Vec<GridPosition> ),
     ChunksGenerated( GroupId ),
+    ChunksMeshed( GroupId ),
 }
 
 pub fn start_chunk_worker( worker_id:u8, chunks_dataset:&Arc<ChunksDataset>, tasks_lock:&Arc<(Mutex<VecDeque<ChunkCmd>>,Condvar)>, tx:mpsc::Sender<ChunkRes> ) {
@@ -96,12 +97,14 @@ pub fn start_chunk_worker( worker_id:u8, chunks_dataset:&Arc<ChunksDataset>, tas
                             generate_chunks( &chunks_dataset, position, index_from, index_to );
                             let _ = tx.send( ChunkRes::ChunksGenerated( id ) );
                         }
-                        ChunkCmd::RemeshChunks( position, render_distance ) => {
+                        ChunkCmd::RemeshChunks( id, position, render_distance ) => {
                             remesh_chunks( &chunks_dataset, position, render_distance );
+                            let _ = tx.send( ChunkRes::ChunksMeshed( id ) );
                         }
-                        ChunkCmd::MultithreadedRemeshChunks( position, index_from, count ) => {
+                        ChunkCmd::MultithreadedRemeshChunks( id, position, index_from, count ) => {
                             let index_to = index_from + count;
                             multithreaded_remesh_chunks( &chunks_dataset, position, index_from, index_to );
+                            let _ = tx.send( ChunkRes::ChunksMeshed( id ) );
                         }
                         ChunkCmd::UpdateChunkLoaderChunks( loader_id, render_distance, new_pos, shift ) => {
                             update_chunk_loader_chunks( &tx, loader_id, render_distance, new_pos, shift );
@@ -344,9 +347,4 @@ fn remesh_chunks( chunks_dataset:&Arc<ChunksDataset>, center_chunk_position:Grid
             }
         }
     }
-
-    // println!( "remesh_chunks end" );
-
-    // println!( "{:?}", chunks.values().map( |c| format!( "{:?}", c.read().unwrap().state ) ).collect::<Vec<_>>() );
-    // dbg!( chunks.values().map( |c| c.read().unwrap().state ).collect::<Vec<_>>() );
 }
