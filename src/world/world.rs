@@ -331,7 +331,7 @@ impl World {
                     let group_tasks = self.tasks_groups.get_mut( &group_id ).unwrap();
                     group_tasks.1 -= 1;
 
-                    // println!( "ChunkRes::ChunksGenerated | queue = {}", group_tasks.1 );
+                    println!( "ChunkRes::ChunksGenerated | queue = {}", group_tasks.1 );
 
                     if group_tasks.1 == 0 {
                         let Some( loader_id ) = group_tasks.0 else { break };
@@ -367,7 +367,7 @@ impl World {
 
                         // println!( "Remesh queued" );
 
-                        if FLAG_PROFILING_WORLD_GENERATION && group_tasks.1 == 0 {
+                        if FLAG_PROFILING_WORLD_GENERATION {
                             println!( "Chunks generation time: {:?}", group_tasks.2.elapsed() );
                         }
 
@@ -382,7 +382,7 @@ impl World {
                     group_tasks.1 -= 1;
 
                     if FLAG_PROFILING_WORLD_RENDERING && group_tasks.1 == 0 {
-                        println!( "Chunks generation time: {:?}", group_tasks.2.elapsed() );
+                        println!( "Chunks meshing time: {:?}", group_tasks.2.elapsed() );
                     }
                 }
 

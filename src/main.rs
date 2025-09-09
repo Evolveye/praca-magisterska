@@ -1,15 +1,15 @@
-// mod world;
-// mod noise;
-// mod structure_tests;
-// mod chunks_generators;
-// mod rendering;
-// mod app;
-// pub mod flags;
+mod world;
+mod noise;
+mod structure_tests;
+mod chunks_generators;
+mod rendering;
+mod app;
+pub mod flags;
 
-use crate::measurements::measure;
+use crate::app::app::App;
 
-mod measurements;
-
+// use crate::measurements::measure;
+// mod measurements;
 // #[allow(unused_imports)]
 // use crate::{ app::app::App, structure_tests::octree::Octree, world::chunk_region_iterator::ChunkRegionIterator };
 
@@ -18,11 +18,12 @@ mod measurements;
 static ALLOC: dhat::Alloc = dhat::Alloc;
 
 fn main() {
-    measure()
-    // pretty_env_logger::init();
+    // measure()
 
-    // let mut app = App::new().unwrap();
-    // app.run_loop();
+    pretty_env_logger::init();
+
+    let mut app = App::new().unwrap();
+    app.run_loop();
 
     // test_cube_with_side( 1, ChunkRegionIterator::with_range( 20..27 ) );
     // test_cube_with_side( 1, ChunkRegionIterator::with_range( 1..27 ) );

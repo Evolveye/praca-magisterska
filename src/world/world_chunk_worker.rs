@@ -117,7 +117,7 @@ pub fn start_chunk_worker( worker_id:u8, chunks_dataset:&Arc<ChunksDataset>, tas
 }
 
 fn generate_chunks( chunks_dataset:&Arc<ChunksDataset>, position:GridPosition, index_from:u32, index_to:u32 ) {
-    // println!( "generate_chunks" );
+    // println!( "generate_chunks | {index_from}..{index_to}" );
 
     let mut cube_layer_iter = ChunkRegionIterator::with_range( index_from..index_to );
     let mut dataset = VoxelDataset::new();
@@ -146,6 +146,7 @@ fn generate_chunks( chunks_dataset:&Arc<ChunksDataset>, position:GridPosition, i
     // Generating the chunks
     // println!( "Generating the chunks" );
     for pos in chunks_pos_to_generate {
+        // println!( "Generating a chunk {pos:?}" );
         let chunk_data = chunks_dataset.default_generator.generate_chunk( &mut dataset, pos, CHUNK_SIZE as u8 );
         let chunks = chunks_dataset.chunks.read().unwrap();
         let Some( chunk ) = chunks.get( &pos ) else { continue };
@@ -223,7 +224,7 @@ fn axis_processor(
 }
 
 fn get_nonexistant_chunks( chunks_dataset:&Arc<ChunksDataset>, position:GridPosition, max_radius:Option<u8>, index_from:u32, index_to:u32 ) -> Vec<(GridPosition, RwLock<WorldChunk>)> {
-    // println!( "get_nonexistant_chunks" );
+    // println!( "get_nonexistant_chunks | {index_from}..{index_to}" );
 
     let mut new_chunks = vec![];
     let chunks = chunks_dataset.chunks.read().unwrap();
