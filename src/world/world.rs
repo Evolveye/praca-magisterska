@@ -36,6 +36,8 @@ enum BlockingTask {
 
 #[allow(dead_code)]
 pub struct World {
+    chunks_generation_group_size: u32,
+    tasks_receiver_single_tick_size: u8,
     chunks_dataset: Arc<ChunksDataset>,
     pub max_radius: Option<u8>,
     chunk_loaders: HashMap<ChunkLoaderId, sync::Weak<RefCell<ChunkLoader>>>,
@@ -57,11 +59,13 @@ impl World {
         let chunks_dataset = Arc::new( ChunksDataset::new( default_generator ) );
         let worker_tasks = Arc::new( (Mutex::new( VecDeque::<ChunkCmd>::new() ), Condvar::new()) );
 
-        for i in 0..3 {
+        for i in 0..12 {
             start_chunk_worker( i, &chunks_dataset, &worker_tasks, res_tx.clone() );
         }
 
         Self {
+            chunks_generation_group_size: 40,
+            tasks_receiver_single_tick_size: 10,
             chunks_dataset,
             max_radius,
             dataset: VoxelDataset::new(),
@@ -283,7 +287,12 @@ impl World {
     pub fn update( &mut self ) {
         // println!( "World update" );
 
-        while let Ok( res ) = self.chunks_rx.try_recv() {
+        for _ in 0..self.tasks_receiver_single_tick_size {
+            let res = match self.chunks_rx.try_recv() {
+                Ok( res ) => res,
+                _ => break,
+            };
+
             match res {
                 ChunkRes::ChunksStateUpdate( loader_id, chunks_to_remove, chunks_to_calculable ) => {
                     // println!( "main: ChunksStateUpdate" );
@@ -331,7 +340,7 @@ impl World {
                     let group_tasks = self.tasks_groups.get_mut( &group_id ).unwrap();
                     group_tasks.1 -= 1;
 
-                    println!( "ChunkRes::ChunksGenerated | queue = {}", group_tasks.1 );
+                    // println!( "ChunkRes::ChunksGenerated | queue = {}", group_tasks.1 );
 
                     if group_tasks.1 == 0 {
                         let Some( loader_id ) = group_tasks.0 else { break };
@@ -398,21 +407,23 @@ impl World {
         }
 
         if self.blocking_tasks_queue.len() > 0 {
-            if let Ok( mut chunks ) = self.chunks_dataset.chunks.try_write() {
-                while let Some( task ) = self.blocking_tasks_queue.pop_front() {
-                    match task {
-                        BlockingTask::ChunksToRemove( chunks_to_remove ) => {
-                            for pos in chunks_to_remove {
-                                chunks.remove( &pos );
-                            }
-                        }
+            let Ok( mut chunks ) = self.chunks_dataset.chunks.try_write() else { return };
 
-                        BlockingTask::ChunksEnsured( new_chunks, id, position, index_from, index_to ) => {
-                            chunks.extend( new_chunks );
+            for _ in 0..self.tasks_receiver_single_tick_size {
+                let Some( task ) = self.blocking_tasks_queue.pop_front() else { break };
 
-                            self.worker_tasks.0.lock().unwrap().push_back( ChunkCmd::GenerateChunks( id, position, index_from, index_to ) );
-                            self.worker_tasks.1.notify_one();
+                match task {
+                    BlockingTask::ChunksToRemove( chunks_to_remove ) => {
+                        for pos in chunks_to_remove {
+                            chunks.remove( &pos );
                         }
+                    }
+
+                    BlockingTask::ChunksEnsured( new_chunks, id, position, index_from, index_to ) => {
+                        chunks.extend( new_chunks );
+
+                        self.worker_tasks.0.lock().unwrap().push_back( ChunkCmd::GenerateChunks( id, position, index_from, index_to ) );
+                        self.worker_tasks.1.notify_one();
                     }
                 }
             }
@@ -423,19 +434,20 @@ impl World {
         let diameter = (render_distance + 1) as u32 * 2 + 1;
         let cube_size = diameter * diameter * diameter;
         let generation_id = GroupId::new();
-        let mut tasks = self.worker_tasks.0.lock().unwrap();
+        let mut tasks = vec![];
         let mut i = 0;
-        let group_size = 10;
+        let group_size = self.chunks_generation_group_size;
 
         loop {
             let count = if cube_size - i >= group_size { group_size } else { cube_size - i };
-            tasks.push_back( ChunkCmd::EnsureChunks( generation_id.clone(), center_chunk_position, self.max_radius, i, count ) );
+            tasks.push( ChunkCmd::EnsureChunks( generation_id.clone(), center_chunk_position, self.max_radius, i, count ) );
 
             i += group_size;
             if i >= cube_size { break }
         }
 
         self.tasks_groups.insert( generation_id, (loader_id, i / group_size, Instant::now()) );
+        self.worker_tasks.0.lock().unwrap().extend( tasks );
         self.worker_tasks.1.notify_all();
     }
 }

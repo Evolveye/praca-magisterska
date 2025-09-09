@@ -1,4 +1,7 @@
-use std::time::{Duration, Instant};
+use std::{
+    io::Write,
+    time::{ Duration, Instant }
+};
 
 use anyhow::Result;
 use cgmath::{ point3, vec3, Matrix4, SquareMatrix };
@@ -38,8 +41,10 @@ pub struct App {
     pub settings: AppSettings,
 
     pub start_time: Instant,
+    pub frame_times: Vec<f32>,
     pub last_tick_time: Instant,
     pub fps_time: Instant,
+    pub frame_count: u64,
 
     frustum_model: Model<FrustumVertex>,
     world_border_model: Option<Model<SimpleVertex>>
@@ -113,6 +118,8 @@ impl App {
             camera_chunk_loader,
             settings,
 
+            frame_times: Vec::with_capacity( 1000 ),
+            frame_count: 0,
             start_time: Instant::now(),
             last_tick_time: Instant::now(),
             fps_time: Instant::now(),
@@ -125,12 +132,17 @@ impl App {
     pub fn tick( &mut self ) {
         let timestamp = Instant::now();
         let time_delta = timestamp.duration_since( self.last_tick_time );
-
         self.last_tick_time = timestamp;
+        self.frame_count += 1;
 
-        if self.fps_time.elapsed() >= Duration::from_secs( 1 ) {
-            // let fps = 1.0 / time_delta.as_secs_f64();
-            // println!( "fps={}", fps as u32 );
+        self.frame_times.push( time_delta.as_secs_f32() );
+        if self.frame_times.len() > 1000 {
+            self.frame_times.remove( 0 );
+        }
+
+        if self.fps_time.elapsed() >= Duration::from_secs( 5 ) {
+            let fps = 1.0 / time_delta.as_secs_f64();
+            println!( "fps={} | times.len={}", fps as u32, self.frame_times.len() );
 
             self.fps_time = timestamp;
         }
@@ -185,6 +197,10 @@ impl App {
                     WindowEvent::KeyboardInput { event, .. } => {
                         match event.physical_key {
                             PhysicalKey::Code( KeyCode::Escape ) => App::destroy( elwt, self ),
+                            PhysicalKey::Code( KeyCode::KeyR ) => {
+                                self.frame_times.clear();
+                                self.control_manager.handle_keyboard_event( &self.settings, event );
+                            },
                             _ => self.control_manager.handle_keyboard_event( &self.settings, event ),
                         }
                     }
@@ -212,6 +228,43 @@ impl App {
             app.renderer.destroy();
         }
 
+        println!( "" );
         println!( "App uptime = {:?}", app.start_time.elapsed() );
+        println!( "" );
+
+        Self::analyze_fps( &app.frame_times )
+    }
+
+    fn analyze_fps( times:&Vec<f32> ) {
+        let fps: Vec<f32> = times.iter().map(|dt| 1.0 / dt).collect();
+        let mut sorted: Vec<f32> = fps.to_vec();
+        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+        let len = sorted.len();
+        let lower_idx = (0.05 * len as f32).floor() as usize;
+        let upper_idx = (0.95 * len as f32).ceil() as usize;
+        let filtered: &[f32] = &sorted[lower_idx..upper_idx.min(len)];
+
+        let mean = filtered.iter().copied().sum::<f32>() / filtered.len() as f32;
+        let std_dev = (filtered.iter().map(|x| (x - mean).powi(2)).sum::<f32>() / filtered.len() as f32).sqrt();
+        let min = *filtered.first().unwrap();
+        let max = *filtered.last().unwrap();
+
+        println!( "Avg FPS: {:.2}", mean );
+        println!( "Std dev: {:.2}", std_dev );
+        println!( "Min FPS: {:.2}", min );
+        println!( "Max FPS: {:.2}", max );
+
+
+        // Write CSV
+        let file = std::fs::File::create( "frame_times.csv" ).unwrap();
+        let mut writer = std::io::BufWriter::new(file);
+
+        writeln!( writer, "frame,dt,fps" ).unwrap();
+
+        for (i, dt) in times.iter().enumerate() {
+            let fps = 1.0 / dt;
+            writeln!( writer, "{},{:.6},{:.2}", i, dt, fps ).unwrap();
+        }
     }
 }

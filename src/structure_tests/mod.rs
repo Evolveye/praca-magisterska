@@ -46,10 +46,10 @@ use crate::chunks_generators::{
 };
 
 pub fn generate_world_as_world( position:Point3<f32> ) -> (World, ChunkLoaderhandle) {
-    let world_generator = GeneratorOfTest11PeaksAndValleys::new( 50 );
+    let world_generator = GeneratorOfTest12HighMap::new( 50 );
     let mut world = World::new( Box::new( world_generator ), None );
     // let mut world = World::new( Box::new( world_generator ), Some( 2 ) );
-    let chunk_loader = world.create_chunk_loader( (position.x, position.y, position.z), 3 );
+    let chunk_loader = world.create_chunk_loader( (position.x, position.y, position.z), 8 );
 
     (world, chunk_loader)
 }
