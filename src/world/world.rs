@@ -4,7 +4,7 @@ use std::{
     sync::{ self, mpsc, Arc, Condvar, Mutex, RwLock }, time::Instant,
 };
 
-use crate::{app::camera::{Camera, Frustum, FrustumCheck}, flags::{FLAG_PROFILING_WORLD_GENERATION, FLAG_PROFILING_WORLD_RENDERING}, world::{
+use crate::{app::camera::{Camera, Frustum, FrustumCheck}, flags::{FLAG_PROFILING_WORLD_GENERATION, FLAG_PROFILING_WORLD_GENERATION_QUEUE, FLAG_PROFILING_WORLD_RENDERING}, world::{
     world_chunk::{ WorldChunk, WorldChunkState }, world_chunk_worker::{ start_chunk_worker, ChunkCmd, ChunkRes, ChunksDataset, GroupId }, world_generator::WorldGenerative, world_holder::{ VoxelDataset, VoxelSide }
 }};
 
@@ -340,7 +340,9 @@ impl World {
                     let group_tasks = self.tasks_groups.get_mut( &group_id ).unwrap();
                     group_tasks.1 -= 1;
 
-                    // println!( "ChunkRes::ChunksGenerated | queue = {}", group_tasks.1 );
+                    if FLAG_PROFILING_WORLD_GENERATION_QUEUE {
+                        println!( "ChunkRes::ChunksGenerated | queue = {}", group_tasks.1 );
+                    }
 
                     if group_tasks.1 == 0 {
                         let Some( loader_id ) = group_tasks.0 else { break };

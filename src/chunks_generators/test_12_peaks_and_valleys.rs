@@ -9,13 +9,13 @@ use crate::{
     }
 };
 
-pub struct GeneratorOfTest11PeaksAndValleys {
+pub struct GeneratorOfTest12PeaksAndValleys {
     noise: SimplexNoise,
     noise_frequency: f64,
     noise_amplitude: f64,
 }
 
-impl GeneratorOfTest11PeaksAndValleys {
+impl GeneratorOfTest12PeaksAndValleys {
     #[allow(unused)]
     pub fn new( seed:u32) -> Self {
         Self {
@@ -33,7 +33,7 @@ impl GeneratorOfTest11PeaksAndValleys {
     }
 }
 
-impl WorldGenerative for GeneratorOfTest11PeaksAndValleys {
+impl WorldGenerative for GeneratorOfTest12PeaksAndValleys {
     fn generate_chunk( &self, dataset:&mut VoxelDataset, origin:(i64, i64, i64), size:u8 ) -> Octree<Voxel> {
         let mut world_holder = Octree::from_max_size( size as u32 );
         let grass_level = 8 - origin.1;

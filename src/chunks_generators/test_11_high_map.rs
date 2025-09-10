@@ -10,13 +10,13 @@ use crate::{
     }
 };
 
-pub struct GeneratorOfTest12HighMap {
+pub struct GeneratorOfTest11HighMap {
     noise: SimplexNoise,
     noise_frequency: f64,
     noise_amplitude: f64,
 }
 
-impl GeneratorOfTest12HighMap {
+impl GeneratorOfTest11HighMap {
     #[allow(unused)]
     pub fn new( seed:u32) -> Self {
         Self {
@@ -34,7 +34,7 @@ impl GeneratorOfTest12HighMap {
     }
 }
 
-impl WorldGenerative for GeneratorOfTest12HighMap {
+impl WorldGenerative for GeneratorOfTest11HighMap {
     fn generate_chunk( &self, dataset:&mut VoxelDataset, origin:(i64, i64, i64), size:u8 ) -> Octree<Voxel> {
         // println!( "Chunk generation {:?}, size={}", origin, size );
         let origin = (origin.0 * size as i64, origin.1 * size as i64, origin.2 * size as i64);
