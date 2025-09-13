@@ -11,5 +11,5 @@ pub mod test_7_half_random_with_differenties;
 pub mod test_8_full_with_differenties;
 pub mod test_9_natural;
 pub mod test_10_floating_islands;
-pub mod test_11_high_map;
+pub mod test_11_height_map;
 pub mod test_12_peaks_and_valleys;

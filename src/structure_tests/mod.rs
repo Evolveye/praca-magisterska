@@ -41,12 +41,12 @@ use crate::chunks_generators::{
     test_8_full_with_differenties::GeneratorOfTest8FullWithDifferenties,
     test_9_natural::GeneratorOfTest9Natural,
     test_10_floating_islands::GeneratorOfTest10FloatingIslands,
-    test_11_high_map::GeneratorOfTest11HighMap,
+    test_11_height_map::GeneratorOfTest11HeightMap,
     test_12_peaks_and_valleys::GeneratorOfTest12PeaksAndValleys,
 };
 
 pub fn generate_world_as_world( position:Point3<f32> ) -> (World, ChunkLoaderhandle) {
-    let world_generator = GeneratorOfTest11HighMap::new( 50 );
+    let world_generator = GeneratorOfTest12PeaksAndValleys::new( 50 );
     let mut world = World::new( Box::new( world_generator ), None );
     // let mut world = World::new( Box::new( world_generator ), Some( 2 ) );
     let chunk_loader = world.create_chunk_loader( (position.x, position.y, position.z), 8 );

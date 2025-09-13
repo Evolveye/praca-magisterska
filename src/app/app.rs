@@ -57,7 +57,8 @@ impl App {
         let window_manager = WindowManager::new()?;
         let control_manager = ControlManager::new(
             // point3( _half_chunk_size, 15.0, _half_chunk_size ), point3( _half_chunk_size, 0.0, 0.0 )
-            point3( -24.0, 70.0, -165.0 ), point3( 64.0, 60.0, 64.0 )
+            point3( _half_chunk_size, 45.0, _half_chunk_size ), point3( 0.0, 30.0, 0.0 )
+            // point3( -24.0, 70.0, -165.0 ), point3( 64.0, 60.0, 64.0 )
         );
         let window_size = window_manager.window.inner_size();
         let camera = Camera::new( control_manager.position, control_manager.rotation, window_size.width, window_size.height );

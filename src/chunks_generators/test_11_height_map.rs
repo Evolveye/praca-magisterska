@@ -10,13 +10,13 @@ use crate::{
     }
 };
 
-pub struct GeneratorOfTest11HighMap {
+pub struct GeneratorOfTest11HeightMap {
     noise: SimplexNoise,
     noise_frequency: f64,
     noise_amplitude: f64,
 }
 
-impl GeneratorOfTest11HighMap {
+impl GeneratorOfTest11HeightMap {
     #[allow(unused)]
     pub fn new( seed:u32) -> Self {
         Self {
@@ -34,7 +34,7 @@ impl GeneratorOfTest11HighMap {
     }
 }
 
-impl WorldGenerative for GeneratorOfTest11HighMap {
+impl WorldGenerative for GeneratorOfTest11HeightMap {
     fn generate_chunk( &self, dataset:&mut VoxelDataset, origin:(i64, i64, i64), size:u8 ) -> Octree<Voxel> {
         // println!( "Chunk generation {:?}, size={}", origin, size );
         let origin = (origin.0 * size as i64, origin.1 * size as i64, origin.2 * size as i64);
@@ -65,14 +65,37 @@ impl WorldGenerative for GeneratorOfTest11HighMap {
             {
                 let below_water = current_min < grass_level - 5;
                 let too_high = current_min > grass_level + 7;
+                // let grass_color = Color {
+                //     red: if current_min % 2 == 0 { 10 }
+                //         else if below_water { 20 }
+                //         else if too_high { 250 } else { 128 },
+                //     green: (127 + (multiplied_noise * 10.0) as i16) as u8,
+                //     blue: if below_water { 150 }
+                //         else if too_high { 250 }
+                //         else { 10 },
+                // };
+
                 let grass_color = Color {
-                    red: if current_min % 2 == 0 { 10 }
-                        else if below_water { 20 }
-                        else if too_high { 250 } else { 128 },
-                    green: (127 + (multiplied_noise * 10.0) as i16) as u8,
-                    blue: if below_water { 150 }
-                        else if too_high { 250 }
-                        else { 10 },
+                    red: if below_water {
+                        if current_min % 2 == 0 { 100 } else { 175 }
+                    } else { 250 }
+                        - if too_high || current_min % 2 == 0 { 0 } else { 25 },
+                    green: if current_min % 2 == 0 {
+                        if too_high { 150 }
+                        else { 250 }
+                    } else { 250 -
+                        if below_water { 0 }
+                        else if too_high { 50 }
+                        else { 25 }
+                    },
+                    blue: if current_min % 2 == 0 {
+                        if too_high { 150 }
+                        else { 250 }
+                    } else { 250 -
+                        if below_water { 0 }
+                        else if too_high { 50 }
+                        else { 25 }
+                    },
                 };
 
                 // let grass_color = Color {
