@@ -57,8 +57,8 @@ impl App {
         let window_manager = WindowManager::new()?;
         let control_manager = ControlManager::new(
             // point3( _half_chunk_size, 15.0, _half_chunk_size ), point3( _half_chunk_size, 0.0, 0.0 )
-            point3( _half_chunk_size, 45.0, _half_chunk_size ), point3( 0.0, 30.0, 0.0 )
-            // point3( -24.0, 70.0, -165.0 ), point3( 64.0, 60.0, 64.0 )
+            // point3( _half_chunk_size, 45.0, _half_chunk_size ), point3( 0.0, 30.0, 0.0 )
+            point3( -24.0, 70.0, -165.0 ), point3( 64.0, 60.0, 64.0 )
         );
         let window_size = window_manager.window.inner_size();
         let camera = Camera::new( control_manager.position, control_manager.rotation, window_size.width, window_size.height );
@@ -240,10 +240,12 @@ impl App {
         let fps: Vec<f32> = times.iter().map(|dt| 1.0 / dt).collect();
         let mut sorted: Vec<f32> = fps.to_vec();
         sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let min_outlier = sorted.first().unwrap();
+        let max_outlier = sorted.last().unwrap();
 
         let len = sorted.len();
-        let lower_idx = (0.05 * len as f32).floor() as usize;
-        let upper_idx = (0.95 * len as f32).ceil() as usize;
+        let lower_idx = (0.025 * len as f32).floor() as usize;
+        let upper_idx = (0.975 * len as f32).ceil() as usize;
         let filtered: &[f32] = &sorted[lower_idx..upper_idx.min(len)];
 
         let mean = filtered.iter().copied().sum::<f32>() / filtered.len() as f32;
@@ -255,6 +257,9 @@ impl App {
         println!( "Std dev: {:.2}", std_dev );
         println!( "Min FPS: {:.2}", min );
         println!( "Max FPS: {:.2}", max );
+        println!( "Min FPS outliers: {:.2}", min_outlier );
+        println!( "Max FPS outliers: {:.2}", max_outlier );
+        println!( "Outliers count: {:.2}", sorted.len() - filtered.len() );
 
 
         // Write CSV
