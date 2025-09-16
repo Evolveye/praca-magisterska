@@ -1,11 +1,10 @@
 use crate::{
-    chunks_generators::utilities::create_voxel, noise::simplex_noise::SimplexNoise, structure_tests::{
-        octree::Octree, quadtree::Quadtree
-    }, world::{
+    chunks_generators::utilities::create_voxel,
+    noise::simplex_noise::SimplexNoise,
+    structure_tests::octree::Octree,
+    world::{
         world_generator::WorldGenerative,
-        world_holder::{
-            fill_with, Color, Material, Voxel, VoxelDataset, WorldHolding
-        }
+        world_holder::{ Color, Material, Voxel, VoxelDataset, WorldHolding }
     }
 };
 

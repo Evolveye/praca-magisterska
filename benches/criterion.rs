@@ -4,6 +4,7 @@ mod remove;
 mod get;
 use criterion::{ criterion_group, criterion_main };
 
+#[allow(unused)]
 use crate::{
     initialisations::measure_structs_initialization,
     get::{ measure_structs_get, measure_structs_get_random, measure_structs_get_reference },

@@ -2,8 +2,10 @@ pub mod simplex_noise;
 
 use simplex_noise::SimplexNoise;
 
+#[allow(dead_code)]
 const FREQUENCY: f64 = 0.05;
 
+#[allow(dead_code)]
 pub fn generate_simplex_noise_image<F:FnMut(u32, u32, f64)>( width:u32, height:u32, mut noise_value_handler:F ) {
     let noise = SimplexNoise::new( 0 );
 

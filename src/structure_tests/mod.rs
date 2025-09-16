@@ -49,7 +49,7 @@ pub fn generate_world_as_world( position:Point3<f32> ) -> (World, ChunkLoaderhan
     let world_generator = GeneratorOfTest12PeaksAndValleys::new( 50 );
     let mut world = World::new( Box::new( world_generator ), None );
     // let mut world = World::new( Box::new( world_generator ), Some( 2 ) );
-    let chunk_loader = world.create_chunk_loader( (position.x, position.y, position.z), 8 );
+    let chunk_loader = world.create_chunk_loader( (position.x, position.y, position.z), 4 );
 
     (world, chunk_loader)
 }

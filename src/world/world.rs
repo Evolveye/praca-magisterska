@@ -59,7 +59,7 @@ impl World {
         let chunks_dataset = Arc::new( ChunksDataset::new( default_generator ) );
         let worker_tasks = Arc::new( (Mutex::new( VecDeque::<ChunkCmd>::new() ), Condvar::new()) );
 
-        for i in 0..12 {
+        for i in 0..8 {
             start_chunk_worker( i, &chunks_dataset, &worker_tasks, res_tx.clone() );
         }
 
