@@ -1,5 +1,6 @@
-pub const SIMULATED_TEST_WORLD_ID:u8 = 1;
+pub const SIMULATED_TEST_WORLD_ID:u8 = 11;
 pub const RENDER_DISTANCE:u8 = 8;
+pub const CPUS_COUNT:u8 = 12;
 
 pub const FLAG_PROFILING_SHOW_FPS:bool = true;
 pub const FLAG_PROFILING_WORLD_GENERATION:bool = true;

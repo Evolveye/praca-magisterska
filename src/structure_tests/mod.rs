@@ -55,13 +55,17 @@ pub fn generate_world_as_world( position:Point3<f32> ) -> (World, ChunkLoaderhan
         7  => Box::new( GeneratorOfTest7HalfRanfomWithDifferenties::new( 50 ) ),
         8  => Box::new( GeneratorOfTest8FullWithDifferenties::new( 50 ) ),
         9  => Box::new( GeneratorOfTest9Natural::new( 50 ) ),
-        10 => Box::new( GeneratorOfTest10FloatingIslands::new( 50 ) ),
-        11 => Box::new( GeneratorOfTest11HeightMap::new( 50 ) ),
+        // 10 => Box::new( GeneratorOfTest10FloatingIslands::new( 50 ) ),
+        10 => Box::new( GeneratorOfTest11HeightMap::new( 50 ) ),
+        11 => Box::new( GeneratorOfTest12PeaksAndValleys::new( 50 ) ),
         _ => panic!( "Unknown WORLD_ID: {SIMULATED_TEST_WORLD_ID}" ),
     };
 
-    let mut world = World::new( world_generator, None );
-    // let mut world = World::new( world_generator, Some( 2 ) );
+    let mut world = match SIMULATED_TEST_WORLD_ID {
+        1..=9 => World::new( world_generator, Some( 2 ) ),
+        _ => World::new( world_generator, None ),
+    };
+
     let chunk_loader = world.create_chunk_loader( (position.x, position.y, position.z), RENDER_DISTANCE );
 
     (world, chunk_loader)

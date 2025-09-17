@@ -4,7 +4,7 @@ use std::{
     sync::{ self, mpsc, Arc, Condvar, Mutex, RwLock }, time::Instant,
 };
 
-use crate::{app::camera::{Camera, Frustum, FrustumCheck}, flags::{FLAG_PROFILING_WORLD_GENERATION, FLAG_PROFILING_WORLD_GENERATION_QUEUE, FLAG_PROFILING_WORLD_RENDERING}, world::{
+use crate::{app::camera::{Camera, Frustum, FrustumCheck}, flags::{CPUS_COUNT, FLAG_PROFILING_WORLD_GENERATION, FLAG_PROFILING_WORLD_GENERATION_QUEUE, FLAG_PROFILING_WORLD_RENDERING}, world::{
     world_chunk::{ WorldChunk, WorldChunkState }, world_chunk_worker::{ start_chunk_worker, ChunkCmd, ChunkRes, ChunksDataset, GroupId }, world_generator::WorldGenerative, world_holder::{ VoxelDataset, VoxelSide }
 }};
 
@@ -59,7 +59,7 @@ impl World {
         let chunks_dataset = Arc::new( ChunksDataset::new( default_generator ) );
         let worker_tasks = Arc::new( (Mutex::new( VecDeque::<ChunkCmd>::new() ), Condvar::new()) );
 
-        for i in 0..8 {
+        for i in 0..CPUS_COUNT-1 {
             start_chunk_worker( i, &chunks_dataset, &worker_tasks, res_tx.clone() );
         }
 
