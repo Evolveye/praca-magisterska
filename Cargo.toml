@@ -20,8 +20,8 @@ rand = "0.9"
 image = "0.25"
 dhat = "0.3"
 
-[profile.release]
-debug = 1
+# [profile.release]
+# debug = 1
 
 [features]
 dhat-heap = []

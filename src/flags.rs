@@ -1,3 +1,7 @@
+pub const SIMULATED_TEST_WORLD_ID:u8 = 1;
+pub const RENDER_DISTANCE:u8 = 8;
+
+pub const FLAG_PROFILING_SHOW_FPS:bool = true;
 pub const FLAG_PROFILING_WORLD_GENERATION:bool = true;
 pub const FLAG_PROFILING_WORLD_GENERATION_QUEUE:bool = true;
 pub const FLAG_PROFILING_WORLD_RENDERING:bool = true;

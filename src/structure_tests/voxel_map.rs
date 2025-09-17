@@ -8,7 +8,7 @@ pub struct VoxelMap<T> {
     pub data: Vec<Option<Arc<T>>>,
     pub size_x: usize,
     pub size_y: usize,
-    pub size_z: usize,
+    #[allow(dead_code)] pub size_z: usize,
     pub filled_cells: u32,
 }
 

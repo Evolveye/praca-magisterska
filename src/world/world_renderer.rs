@@ -1,9 +1,7 @@
 use vulkanalia::prelude::v1_0::*;
 use vulkanalia::vk;
 use crate::rendering::{
-    model_strip::ModelStrip,
-    renderer::Renderer,
-    vertex::{ Renderable, RendererModelDescriptions, Vec3 }
+    model_strip::ModelStrip, renderer::Renderer, vertex::{ Renderable, RendererModelDescriptions, Vec3 }
 };
 use super::{
     voxel_vertices::{ VoxelVertex, VOXEL_SIDE_VERTICES },
@@ -13,6 +11,7 @@ use super::{
 
 pub struct WorldRenderer {
     pub model: ModelStrip<VoxelVertex>,
+    // pub model: Model<VoxelVertex>,
 }
 
 impl WorldRenderer {
@@ -20,6 +19,7 @@ impl WorldRenderer {
         Self {
             model: unsafe {
                 ModelStrip::<VoxelVertex>::new( renderer, VOXEL_SIDE_VERTICES.to_vec() ).unwrap()
+                // Model::<VoxelVertex>::new( renderer, VOXEL_SIDE_VERTICES.to_vec(), VOXEL_SIDE_INDICES.to_vec() ).unwrap()
             },
         }
     }

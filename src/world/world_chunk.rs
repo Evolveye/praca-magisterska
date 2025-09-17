@@ -113,6 +113,8 @@ impl WorldChunk {
             }
         }
 
+        // let mut collected = HashSet::new();
+
         for axis_turn in 0..6 {
             for x in 0..CHUNK_SIZE {
                 for y in 0..CHUNK_SIZE {
@@ -127,6 +129,13 @@ impl WorldChunk {
                             2 | 3 => (x as u32, z, y as u32), // x,z=y 3,4 Y
                             _     => (x as u32, y as u32, z), // x,y=z 5,6 Z
                         };
+
+                        // if collected.contains( &voxel_pos ) {
+                        //     num &= num - 1;
+                        //     continue
+                        // }
+
+                        // collected.insert( voxel_pos );
 
                         if let Some( voxel ) = structure.data.get( voxel_pos.0, voxel_pos.1, voxel_pos.2 ) {
                             renderables.push( VoxelSide::from_voxel_rc(

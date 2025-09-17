@@ -16,14 +16,11 @@ use crate::{
         control_manager::ControlManager,
         settings::AppSettings,
         window_manager::WindowManager,
-    },
-    rendering::{
+    }, flags::FLAG_PROFILING_SHOW_FPS, rendering::{
         model::{ Model, ModelInstance },
         renderer::Renderer,
         vertex::{ Renderable, SimpleVertex },
-    },
-    structure_tests::generate_world_as_world,
-    world::{
+    }, structure_tests::generate_world_as_world, world::{
         voxel_vertices::{ VOXEL_CORNERS, VOXEL_EDGES_INDICES, VOXEL_VERTICES },
         world::{ ChunkLoaderhandle, World, CHUNK_SIZE },
         world_renderer::WorldRenderer,
@@ -133,19 +130,22 @@ impl App {
     pub fn tick( &mut self ) {
         let timestamp = Instant::now();
         let time_delta = timestamp.duration_since( self.last_tick_time );
-        self.last_tick_time = timestamp;
-        self.frame_count += 1;
 
-        self.frame_times.push( time_delta.as_secs_f32() );
-        if self.frame_times.len() > 1000 {
-            self.frame_times.remove( 0 );
-        }
+        if FLAG_PROFILING_SHOW_FPS {
+            self.last_tick_time = timestamp;
+            self.frame_count += 1;
 
-        if self.fps_time.elapsed() >= Duration::from_secs( 5 ) {
-            let fps = 1.0 / time_delta.as_secs_f64();
-            println!( "fps={} | times.len={}", fps as u32, self.frame_times.len() );
+            self.frame_times.push( time_delta.as_secs_f32() );
+            if self.frame_times.len() > 1000 {
+                self.frame_times.remove( 0 );
+            }
 
-            self.fps_time = timestamp;
+            if self.fps_time.elapsed() >= Duration::from_secs( 5 ) {
+                let fps = 1.0 / time_delta.as_secs_f64();
+                println!( "fps={} | times.len={}", fps as u32, self.frame_times.len() );
+
+                self.fps_time = timestamp;
+            }
         }
 
         self.world.move_chunk_loader_to( &self.camera_chunk_loader, self.control_manager.position.into(), self.control_manager.freezed );
@@ -233,7 +233,9 @@ impl App {
         println!( "App uptime = {:?}", app.start_time.elapsed() );
         println!( "" );
 
-        Self::analyze_fps( &app.frame_times )
+        if app.frame_times.len() > 0 {
+            Self::analyze_fps( &app.frame_times );
+        }
     }
 
     fn analyze_fps( times:&Vec<f32> ) {

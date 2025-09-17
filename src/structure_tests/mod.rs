@@ -22,10 +22,9 @@ use voxel_list::VoxelList;
 #[allow(unused_imports)]
 use voxel_map::VoxelMap;
 
-use crate::world::{
-    world::{ ChunkLoaderhandle, World },
-    world_holder::{ Voxel, WorldHolding }
-};
+use crate::{flags::{RENDER_DISTANCE, SIMULATED_TEST_WORLD_ID}, world::{
+    world::{ ChunkLoaderhandle, World }, world_generator::WorldGenerative, world_holder::{ Voxel, WorldHolding }
+}};
 
 #[allow(unused_imports)]
 use crate::chunks_generators::{
@@ -46,10 +45,24 @@ use crate::chunks_generators::{
 };
 
 pub fn generate_world_as_world( position:Point3<f32> ) -> (World, ChunkLoaderhandle) {
-    let world_generator = GeneratorOfTest12PeaksAndValleys::new( 50 );
-    let mut world = World::new( Box::new( world_generator ), None );
-    // let mut world = World::new( Box::new( world_generator ), Some( 2 ) );
-    let chunk_loader = world.create_chunk_loader( (position.x, position.y, position.z), 4 );
+    let world_generator:Box<dyn WorldGenerative> = match SIMULATED_TEST_WORLD_ID {
+        1  => Box::new( GeneratorOfTest1Empty::new( 50 ) ),
+        2  => Box::new( GeneratorOfTest2Single::new( 50 ) ),
+        3  => Box::new( GeneratorOfTest3Half::new( 50 ) ),
+        4  => Box::new( GeneratorOfTest4HalfRandom::new( 50 ) ),
+        5  => Box::new( GeneratorOfTest5WithoutSingle::new( 50 ) ),
+        6  => Box::new( GeneratorOfTest6Full::new( 50 ) ),
+        7  => Box::new( GeneratorOfTest7HalfRanfomWithDifferenties::new( 50 ) ),
+        8  => Box::new( GeneratorOfTest8FullWithDifferenties::new( 50 ) ),
+        9  => Box::new( GeneratorOfTest9Natural::new( 50 ) ),
+        10 => Box::new( GeneratorOfTest10FloatingIslands::new( 50 ) ),
+        11 => Box::new( GeneratorOfTest11HeightMap::new( 50 ) ),
+        _ => panic!( "Unknown WORLD_ID: {SIMULATED_TEST_WORLD_ID}" ),
+    };
+
+    let mut world = World::new( world_generator, None );
+    // let mut world = World::new( world_generator, Some( 2 ) );
+    let chunk_loader = world.create_chunk_loader( (position.x, position.y, position.z), RENDER_DISTANCE );
 
     (world, chunk_loader)
 }

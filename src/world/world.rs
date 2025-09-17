@@ -312,12 +312,14 @@ impl World {
 
                     for pos in chunks_to_calculable {
                         if let Some( chunk ) = chunks.get( &pos ) {
-                            chunk.write().unwrap().state = WorldChunkState::Calculable;
+                            let Ok( mut chunk ) = chunk.write() else {continue };
+                            chunk.state = WorldChunkState::Calculable;
                         }
                     }
                     for pos in &chunks_to_remove {
                         if let Some( chunk ) = chunks.get( &pos ) {
-                            chunk.write().unwrap().state = WorldChunkState::Stashing;
+                            let Ok( mut chunk ) = chunk.write() else {continue };
+                            chunk.state = WorldChunkState::Stashing;
                         }
                     }
                     drop( chunks );

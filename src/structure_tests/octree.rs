@@ -335,6 +335,7 @@ impl<T> OctreeNode<T> {
         }
     }
 
+    #[allow(dead_code)]
     fn contains_point( offset:&(u32, u32, u32), size:u32, point:&(u32, u32, u32) ) -> bool {
         point.0 >= offset.0 && point.0 < offset.0 + size &&
         point.1 >= offset.1 && point.1 < offset.1 + size &&
@@ -426,6 +427,7 @@ impl<T> Octree<T> {
 }
 
 impl Octree<Voxel> {
+    #[allow(dead_code)]
     pub fn get_visible_with_flood( &self, initial_point:(u32,u32,u32) ) -> Vec<VoxelSide> {
         struct Point {
             coords: (u32,u32,u32),
