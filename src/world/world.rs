@@ -129,11 +129,6 @@ impl World {
                         loader_pos.2 as f32 - render_distance,
                     );
 
-                    // let max = (
-                    //     min.0 + CHUNK_SIZE_F32,
-                    //     min.1 + CHUNK_SIZE_F32 * 2.0,
-                    //     min.2 + CHUNK_SIZE_F32,
-                    // );
                     let max = (
                         loader_pos.0 as f32 + render_distance + 1.0,
                         loader_pos.1 as f32 + render_distance + 1.0,
@@ -161,11 +156,15 @@ impl World {
                 let chunks = self.chunks_dataset.chunks.read().unwrap();
                 let max = (max.0 as i64, max.1 as i64, max.2 as i64);
                 let mut x = min.0 as i64;
-                let mut y = min.1 as i64;
-                let mut z = min.2 as i64;
+                let y = min.1 as i64;
+                let z = min.2 as i64;
 
                 while x < max.0 {
+                    let mut y = y.clone();
+
                     while y < max.1 {
+                        let mut z = z.clone();
+
                         while z < max.2 {
                             if let Some( chunk ) = chunks.get( &(x, y, z) ) {
                                 if let Ok( chunk ) = chunk.try_read() {
@@ -183,12 +182,13 @@ impl World {
                 }
             }
             FrustumCheck::Intersect => {
-                let grid_min = (min.0 as i64, min.1 as i64, min.2 as i64);
                 let size_x = (max.0 - min.0) as i64;
                 let size_y = (max.1 - min.1) as i64;
                 let size_z = (max.2 - min.2) as i64;
 
-                if size_x <= 1 && size_y <= 1 && size_z <= 1 {
+                if size_x == 1 && size_y == 1 && size_z == 1 {
+                    let grid_min = (min.0 as i64, min.1 as i64, min.2 as i64);
+
                     if let Some( chunk ) = self.chunks_dataset.chunks.read().unwrap().get( &grid_min ) {
                         if let Ok( chunk ) = chunk.try_read() {
                             result.extend( chunk.renderables.clone() );
