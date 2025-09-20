@@ -65,6 +65,11 @@ impl Camera {
         self.view_matrix = Self::get_view_mat( position, rotation );
 
         if freezed {
+            if self.freezed_frustum_corners.is_none() {
+                println!( " - proj_matrix={:?}", self.proj_matrix );
+                println!( " - view_matrix={:?}", self.view_matrix );
+            }
+
             self.freezed_frustum_corners = Some( self.get_frustum_corners() );
         } else {
             self.frustum = Frustum::from_view_proj( self.view_matrix, self.proj_matrix );

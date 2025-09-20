@@ -1,5 +1,6 @@
 pub mod peaks_and_valleys;
 pub mod cube;
+pub mod floatings;
 pub mod utilities;
 pub mod test_1_empty;
 pub mod test_2_single;
@@ -13,3 +14,4 @@ pub mod test_9_natural;
 pub mod test_10_floating_islands;
 pub mod test_11_height_map;
 pub mod test_12_peaks_and_valleys;
+pub mod test_13_plains_with_floatings;

@@ -99,7 +99,7 @@ impl ControlManager {
             PhysicalKey::Code( KeyCode::KeyF ) => {
                 if pressed {
                     self.freezed = !self.freezed;
-                    println!( "freezed={}", self.freezed )
+                    println!( "freezed={}", self.freezed );
                 }
             }
 

@@ -16,7 +16,7 @@ use crate::{
         control_manager::ControlManager,
         settings::AppSettings,
         window_manager::WindowManager,
-    }, flags::FLAG_PROFILING_SHOW_FPS, rendering::{
+    }, flags::{FLAG_PROFILING_SHOW_FPS, SIMULATED_TEST_WORLD_ID}, rendering::{
         model::{ Model, ModelInstance },
         renderer::Renderer,
         vertex::{ Renderable, SimpleVertex },
@@ -49,14 +49,17 @@ pub struct App {
 
 impl App {
     pub fn new() -> Result<Self> {
-        let _half_chunk_size = CHUNK_SIZE as f32 / 2.0;
+        let chunk_size = CHUNK_SIZE as f32;
+        let half_chunk_size = chunk_size / 2.0;
 
         let window_manager = WindowManager::new()?;
-        let control_manager = ControlManager::new(
-            // point3( _half_chunk_size, 15.0, _half_chunk_size ), point3( _half_chunk_size, 0.0, 0.0 )
-            // point3( _half_chunk_size, 45.0, _half_chunk_size ), point3( 0.0, 30.0, 0.0 )
-            point3( -24.0, 70.0, -165.0 ), point3( 64.0, 60.0, 64.0 )
-        );
+        let control_manager = match SIMULATED_TEST_WORLD_ID {
+            1..=9 => ControlManager::new( point3( -24.0, 70.0, -165.0 ), point3( 64.0, 60.0, 64.0 ) ),
+            10..=11 => ControlManager::new( point3( half_chunk_size, 45.0, half_chunk_size ), point3( 0.0, 30.0, 0.0 ) ),
+            12 => ControlManager::new( point3( half_chunk_size, 45.0, -half_chunk_size ), point3( 100.0, 40.0, -100.0 ) ),
+            _ => panic!( "World with ID \"{}\" doesn't exists", SIMULATED_TEST_WORLD_ID )
+        };
+
         let window_size = window_manager.window.inner_size();
         let camera = Camera::new( control_manager.position, control_manager.rotation, window_size.width, window_size.height );
         let renderer = Renderer::create( &window_manager.window )?;
@@ -130,9 +133,9 @@ impl App {
     pub fn tick( &mut self ) {
         let timestamp = Instant::now();
         let time_delta = timestamp.duration_since( self.last_tick_time );
+        self.last_tick_time = timestamp;
 
         if FLAG_PROFILING_SHOW_FPS {
-            self.last_tick_time = timestamp;
             self.frame_count += 1;
 
             self.frame_times.push( time_delta.as_secs_f32() );

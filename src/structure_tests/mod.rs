@@ -22,7 +22,7 @@ use voxel_list::VoxelList;
 #[allow(unused_imports)]
 use voxel_map::VoxelMap;
 
-use crate::{flags::{RENDER_DISTANCE, SIMULATED_TEST_WORLD_ID}, world::{
+use crate::{chunks_generators::test_13_plains_with_floatings::GeneratorOfTest13PlainsWithFloatings, flags::{RENDER_DISTANCE, SIMULATED_TEST_WORLD_ID}, world::{
     world::{ ChunkLoaderhandle, World }, world_generator::WorldGenerative, world_holder::{ Voxel, WorldHolding }
 }};
 
@@ -58,6 +58,7 @@ pub fn generate_world_as_world( position:Point3<f32> ) -> (World, ChunkLoaderhan
         // 10 => Box::new( GeneratorOfTest10FloatingIslands::new( 50 ) ),
         10 => Box::new( GeneratorOfTest11HeightMap::new( 50 ) ),
         11 => Box::new( GeneratorOfTest12PeaksAndValleys::new( 50 ) ),
+        12 => Box::new( GeneratorOfTest13PlainsWithFloatings::new( 50 ) ),
         _ => panic!( "Unknown WORLD_ID: {SIMULATED_TEST_WORLD_ID}" ),
     };
 

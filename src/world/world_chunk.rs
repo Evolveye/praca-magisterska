@@ -216,7 +216,7 @@ impl WorldChunk {
         (
             (world_position.0 as i64).div_euclid( chunk_size ),
             (world_position.1 as i64).div_euclid( chunk_size ),
-            (world_position.2 as i64).div_euclid( chunk_size )
+            (world_position.2 as i64).div_euclid( chunk_size ),
         )
     }
 }

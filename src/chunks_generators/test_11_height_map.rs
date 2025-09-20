@@ -45,10 +45,9 @@ impl WorldGenerative for GeneratorOfTest11HeightMap {
 
         let quadtree = Quadtree::from_terrain_generation( max_depth, &|x, z| {
             self.noise.noise3d(
-                // TODO Find out why "x" and "z" are swapped
-                (origin.0 + z as i64) as f64 * self.noise_frequency,
+                (origin.0 + x as i64) as f64 * self.noise_frequency,
                 1.0,
-                (origin.2 + x as i64) as f64 * self.noise_frequency,
+                (origin.2 + z as i64) as f64 * self.noise_frequency,
             )
         } );
 

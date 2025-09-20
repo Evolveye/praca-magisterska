@@ -32,7 +32,7 @@ pub fn generate_unique( seed:u64, n:usize ) -> Vec<u32> {
     let mut set = HashSet::with_capacity( n );
 
     while set.len() < n {
-        let val:u32 = rng.random();
+        let val = rng.random();
         set.insert( val );
     }
 

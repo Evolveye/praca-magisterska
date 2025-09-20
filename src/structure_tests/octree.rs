@@ -165,9 +165,9 @@ impl<T> OctreeNode<T> {
             let child_size = size / 2;
 
             for child_index in 0..8 {
-                let cx = origin_x + if (child_index >> 2) & 1 == 1 { child_size } else { 0 };
+                let cx = origin_x + if child_index & 1 == 1 { child_size } else { 0 };
                 let cy = origin_y + if (child_index >> 1) & 1 == 1 { child_size } else { 0 };
-                let cz = origin_z + if child_index & 1 == 1 { child_size } else { 0 };
+                let cz = origin_z + if (child_index >> 2) & 1 == 1 { child_size } else { 0 };
 
                 branch.children[ child_index ].fill_at( depth - 1, (cx, cy, cz), child_size, fill_from, fill_to, value.clone() );
             }
